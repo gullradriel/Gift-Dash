@@ -17,8 +17,10 @@
 #include "nilorea/n_list.h"
 #include "nilorea/n_str.h"
 #include "nilorea/n_time.h"
-#include "n_fluids.h"
+#include "nilorea/n_thread_pool.h"
+
 #include "states_management.h"
+#include "sledge_physics.h"
 
 #include <allegro5/allegro.h>
 #include <allegro5/allegro_ttf.h>
@@ -49,7 +51,6 @@ ALLEGRO_TIMER *logic_timer = NULL ;
 N_TIME logic_chrono ;
 N_TIME drawing_chrono ;
 
-N_FLUID *fluid_sim = NULL ;
 size_t WIDTH  = 1280 ,
        HEIGHT = 800 ;
 bool fullscreen = 0 ;
@@ -225,7 +226,8 @@ int main( int argc, char *argv[] )
         al_set_new_display_flags( ALLEGRO_OPENGL|ALLEGRO_WINDOWED );
     }
 
-    al_set_new_bitmap_flags( ALLEGRO_VIDEO_BITMAP|ALLEGRO_NO_PRESERVE_TEXTURE );
+    // not working under linux ask why
+	// al_set_new_bitmap_flags( ALLEGRO_VIDEO_BITMAP|ALLEGRO_NO_PRESERVE_TEXTURE );
 
     display = al_create_display( WIDTH, HEIGHT );
     if( !display )
@@ -273,85 +275,16 @@ int main( int argc, char *argv[] )
         al_play_sample(sample_data[ 0 ] , 1 , 0 , 1 , ALLEGRO_PLAYMODE_LOOP , NULL );
     }
 
-/*
-    // Example usage
-int main() {
-    // Initialize the car with mass = 1000 kg
-    Car myCar;
-    initCar(&myCar, 0.0f, 0.0f, 1000.0f);
-
-    // Simulate actions
-    for (int i = 0; i < 20; i++) {
-        if (i < 5) {
-            accelerate(&myCar); // Accelerate for the first 5 steps
-        } else if (i < 10) {
-            steer(&myCar, STEERING_ANGLE); // Steer for the next 5 steps
-        } else if (i < 15) {
-            drift(&myCar, 15.0f); // Apply a drift
-        } else {
-            brake(&myCar); // Brake in the last steps
-        }
-
-        updateCar(&myCar);
-        printCarStatus(&myCar);
-    }
-
-    return 0;
- } */
-
+	// Initialize the car with mass = 1000 kg
+    VEHICLE santaSledge;
+    initVehicle(&santaSledge, 0.0f, 0.0f, 1000.0f);
 
     thread_pool = new_thread_pool( get_nb_cpu_cores() , 0 );
 
     n_log( LOG_INFO , "Starting %d threads" , get_nb_cpu_cores() );
 
-    /* set fluid */
-    int threadedProcessing = 0 ;
-    N_FLUID *fluid_data = NULL ;
-    Malloc( fluid_data , N_FLUID , 1 );
-    load_fluid_state( fluid_data , &threadedProcessing , "fluid_config.json" );
-    fluid_sim = new_n_fluid( 
-            fluid_data -> density , 
-            fluid_data -> gravity , 
-            fluid_data -> numIters , 
-            fluid_data -> fluid_production_percentage , 
-            fluid_data -> overRelaxation , 
-            WIDTH / fluid_data -> cScale , HEIGHT / fluid_data -> cScale 
-            );
-    Free( fluid_data );
-    load_fluid_state( fluid_sim , &threadedProcessing , "fluid_config.json" );
-    fluid_sim -> dt = 1.0 / logicFPS ;
-
-    size_t n = fluid_sim -> numY;
-    double inVel = 2.0;
-    for( size_t i = 0; i < fluid_sim -> numX; i++) 
-    {
-        for (size_t j = 0; j < fluid_sim -> numY; j++) 
-        {
-            double s = 1.0;	// fluid
-            if (i == 0 || j == 0 || j == fluid_sim -> numY-1)
-                s = 0.0;	// solid
-                            //
-            fluid_sim -> s[i*n + j] = s ;
-
-            if (i == 1) {
-                fluid_sim -> u[i*n + j] = inVel;
-            }
-        }
-    }
-    double pipeH = fluid_sim -> fluid_production_percentage * fluid_sim -> numY;
-    size_t minJ = floor( 0.5 * fluid_sim -> numY - 0.5 * pipeH );
-    size_t maxJ = floor( 0.5 * fluid_sim -> numY + 0.5 * pipeH );
-    for( size_t j = 0 ; j < minJ ; j ++ )
-        fluid_sim -> m[j] = 1.0;
-    for (size_t j = minJ; j < maxJ; j++)
-        fluid_sim -> m[j] = 0.0;
-    for( size_t j = maxJ ; j < fluid_sim -> numY ; j ++ )
-        fluid_sim -> m[j] = 1.0;
-
     bool do_draw = 1 , do_logic = 1 ;
     int mx = WIDTH/3 , my = HEIGHT/2 , mouse_button = 0 , mouse_b1 = 0 , mouse_b2 = 0 ;
-
-    n_fluid_resetObstacles( fluid_sim );
 
     al_flush_event_queue( event_queue );
     al_set_mouse_xy( display , WIDTH/3 , HEIGHT/2 );
@@ -555,59 +488,47 @@ int main() {
                 // get_keyboard( chat_line , ev );
                 if( key[KEY_F1 ] )
                 {
-                    fluid_sim -> showSmoke = 1 ;
                 }
                 if( key[KEY_F2 ] )
                 {
-                    fluid_sim -> showSmoke = 0 ;
                 }
                 if( key[KEY_F3 ] )
                 {
-                    fluid_sim -> showPressure = 1 ;
                 }
                 if( key[KEY_F4 ] )
                 {
-                    fluid_sim -> showPressure = 0 ;
                 }
                 if( key[KEY_F5 ] )
                 {
-                    fluid_sim -> showPaint = 1 ;
                 }
                 if( key[KEY_F6 ] )
                 {
-                    fluid_sim -> showPaint = 0 ;
                 }
                 if( key[KEY_UP] )
                 {
-                    fluid_sim -> density += 100.0 ;
+            		accelerateVehicle(&santaSledge); // Accelerate for the first 5 steps
                 }
                 if( key[KEY_DOWN] )
                 {
-                    fluid_sim -> density -= 100.0 ;
-                    if( fluid_sim -> density < 1.0 ) fluid_sim -> density = 1.0 ;
+            		brakeVehicle(&santaSledge); // Brake in the last steps
                 }
                 if( key[KEY_LEFT] )
                 {
-                    fluid_sim -> numIters ++ ;
+            		steerVehicle(&santaSledge, -2.0 ); // Steer for the next 5 steps
                 }
                 if( key[KEY_RIGHT] )
                 {
-                    fluid_sim -> numIters -- ;
-                    if( fluid_sim -> numIters < 1.0 ) fluid_sim -> numIters = 1.0 ;
+            		steerVehicle(&santaSledge, 2.0); // Steer for the next 5 steps
                 }
                 if( key[KEY_PAD_PLUS] )
                 {
-                    fluid_sim -> fluid_production_percentage += 0.01 ;
-                    if( fluid_sim -> fluid_production_percentage > 1.0 ) fluid_sim -> fluid_production_percentage = 1.0 ;
                 }
                 if( key[KEY_PAD_MINUS] )
                 {
-                    fluid_sim -> fluid_production_percentage -= 0.01 ;
-                    if( fluid_sim -> fluid_production_percentage < 0.1 ) fluid_sim -> fluid_production_percentage = 0.1 ;
                 }
                 if( mouse_button )
                 {
-                    n_log( LOG_DEBUG , "mouse button: %d" , mouse_button );
+                    //n_log( LOG_DEBUG , "mouse button: %d" , mouse_button );
                 }
             } 
         }while( !al_is_event_queue_empty( event_queue) );
@@ -626,29 +547,13 @@ int main() {
                 }
                 old_mx = mx ; 
                 old_my = my ;
-                n_fluid_resetObstacles( fluid_sim );
-                n_fluid_setObstacle( fluid_sim , mx / fluid_sim -> cScale , (my - 36) / fluid_sim -> cScale , vx , vy , 32 / fluid_sim -> cScale );
-                n_fluid_setObstacle( fluid_sim , mx / fluid_sim -> cScale , (my + 36) / fluid_sim -> cScale , vx , vy , 32 / fluid_sim -> cScale );
             }
 
-            double pipeH = fluid_sim -> fluid_production_percentage * fluid_sim -> numY;
-            size_t minJ = floor( 0.5 * fluid_sim -> numY - 0.5 * pipeH );
-            size_t maxJ = floor( 0.5 * fluid_sim -> numY + 0.5 * pipeH );
-            for( size_t j = 0 ; j < minJ ; j ++ )
-                fluid_sim -> m[j] = 1.0;
-            for (size_t j = minJ; j < maxJ; j++)
-                fluid_sim -> m[j] = 0.0;
-            for( size_t j = maxJ ; j < fluid_sim -> numY ; j ++ )
-                fluid_sim -> m[j] = 1.0;
-            for (size_t j = minJ; j < maxJ; j++)
-                fluid_sim -> m[j] = 0.0;
-
-            if( threadedProcessing == 1 )
-                n_fluid_simulate_threaded( fluid_sim , thread_pool );
-            else
-                n_fluid_simulate( fluid_sim );
-
             logic_duration = ( logic_duration + get_usec( &logic_chrono ) ) / 2;
+
+        	updateVehicle(&santaSledge);
+        	printVehicle(&santaSledge);
+
             do_logic = 0 ;
         }
         if( do_draw == 1 )
@@ -665,23 +570,19 @@ int main() {
             if( !backbuffer )
                 al_lock_bitmap( scrbuf , al_get_bitmap_format( scrbuf ) , ALLEGRO_LOCK_READWRITE  );
 
-            n_fluid_draw( fluid_sim );
-
+			//
+			// draw gift dash world here
+			//
+			al_clear_to_color( al_map_rgb( 0 , 0 , 0 ));
             al_draw_circle( mx , my - 36 , 32 , al_map_rgb( 255 , 0 , 0 ) , 2.0 );
             al_draw_circle( mx , my + 36 , 32 , al_map_rgb( 255 , 0 , 0 ) , 2.0 );
 
-            static N_STR *textout = NULL ;
-            nstrprintf( textout , "[F1/F2]:showSmoke:%d [F3/F4]:showPressure:%d [F5/F6]:showPaint:%d" , fluid_sim -> showSmoke , fluid_sim -> showPressure , fluid_sim -> showPaint );
-            al_draw_text( font, al_map_rgb( 0 , 0 , 255 ), WIDTH , 10 , ALLEGRO_ALIGN_RIGHT , _nstr( textout ) );
 
-            nstrprintf( textout , "numIters: %ld production: %3.3g density: %3.3g" , fluid_sim -> numIters , fluid_sim -> fluid_production_percentage , fluid_sim -> density );
-            al_draw_text( font, al_map_rgb( 0 , 0 , 255 ), WIDTH , 25 , ALLEGRO_ALIGN_RIGHT , _nstr( textout ) );
+            al_draw_circle( santaSledge . x + WIDTH / 2  , santaSledge . y  + HEIGHT / 2 , 20 , al_map_rgb( 255 , 255 , 0 ) , 3.0 );
 
-            nstrprintf( textout , "logic(max %ld): %ld usecs" , (size_t)(1000000.0/logicFPS) , logic_duration  );
-            al_draw_text( font, al_map_rgb( 0 , 0 , 255 ), 5 , 10 , ALLEGRO_ALIGN_LEFT , _nstr( textout ) );
-
-            nstrprintf( textout , "drawing(max %ld): %ld usecs" , (size_t)(1000000.0/drawFPS) , drawing_duration );
-            al_draw_text( font, al_map_rgb( 0 , 0 , 255 ), 5 , 30 , ALLEGRO_ALIGN_LEFT , _nstr( textout ) );
+            //static N_STR *textout = NULL ;
+            //nstrprintf( textout , "[F1/F2]:showSmoke:%d [F3/F4]:showPressure:%d [F5/F6]:showPaint:%d" , fluid_sim -> showSmoke , fluid_sim -> showPressure , fluid_sim -> showPaint );
+            //al_draw_text( font, al_map_rgb( 0 , 0 , 255 ), WIDTH , 10 , ALLEGRO_ALIGN_RIGHT , _nstr( textout ) );
 
             if( !backbuffer )
             {
@@ -691,9 +592,7 @@ int main() {
             }
 
             drawing_duration = ( drawing_duration + get_usec( &drawing_chrono ) ) / 2;
-
             al_flip_display();
-
             do_draw = 0 ;
         }
 

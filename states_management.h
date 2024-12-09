@@ -19,11 +19,7 @@
 extern "C" {
 #endif
 
-#include "cJSON.h"
-#include "n_fluids.h"
-
     int load_app_state( char *state_filename , size_t *WIDTH , size_t *HEIGHT , bool *fullscreen , char **bgmusic , double *drawFPS , double *logicFPS );
-    int load_fluid_state( N_FLUID *fluid , int *threaded , char *state_filename );
 
 #ifdef __cplusplus
 }

@@ -11,27 +11,27 @@
 #define DELTA_TIME 0.1f         // Simulation time step in seconds
 #define PI 3.14159265359f       // Pi constant for trigonometric calculations
 
-// 2D_VEHICLE structure
-typedef struct 2D_VEHICLE {
+// VEHICLE structure
+typedef struct VEHICLE {
     float x, y;             // Position in units
     float speed;            // Forward speed in units per second
     float direction;        // Direction in degrees (0 = right, 90 = up)
     float drift_angle;      // Drift offset in degrees
     float lateral_velocity; // Lateral velocity in units per second
     float mass;             // Mass in kilograms
-} 2D_VEHICLE;
+} VEHICLE;
 
-// Initialize a 2D_VEHICLE
-void initCar(2D_VEHICLE *vehicle, float startX, float startY, float mass);
-// Accelerate the 2D_VEHICLE
-void accelerate(2D_VEHICLE *vehicle);
-// Brake the 2D_VEHICLE
-void brake(2D_VEHICLE *vehicle);
-// Steer the 2D_VEHICLE (adjust direction and induce lateral velocity)
-void steer(2D_VEHICLE *vehicle, float angle);
+// Initialize a VEHICLE
+void initVehicle(VEHICLE *vehicle, float startX, float startY, float mass);
+// Accelerate the VEHICLE
+void accelerateVehicle(VEHICLE *vehicle);
+// Brake the VEHICLE
+void brakeVehicle(VEHICLE *vehicle);
+// Steer the VEHICLE (adjust direction and induce lateral velocity)
+void steerVehicle(VEHICLE *vehicle, float angle);
 // Apply drifting effect
-void drift(2D_VEHICLE *vehicle, float driftAngle);
-// Update 2D_VEHICLE position and physics
-void updateCar(2D_VEHICLE *vehicle);
-// Display 2D_VEHICLE status
-void printCarStatus(const 2D_VEHICLE *vehicle);
+void driftVehicle(VEHICLE *vehicle, float driftAngle);
+// Update VEHICLE position and physics
+void updateVehicle(VEHICLE *vehicle);
+// Display VEHICLE status
+void printVehicle(const VEHICLE *vehicle);
