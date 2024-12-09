@@ -3,12 +3,12 @@ CC=gcc
 EXT=
 CLIBS=
 
-OPT=-W -Wall -D_XOPEN_SOURCE=600 -D_XOPEN_SOURCE_EXTENTED -std=gnu99 -O3
-#OPT=-W -Wall -D_XOPEN_SOURCE=600 -D_XOPEN_SOURCE_EXTENTED -std=gnu99 -g
+#OPT=-W -Wall -D_XOPEN_SOURCE=600 -D_XOPEN_SOURCE_EXTENTED -std=gnu99 -O3
+OPT=-W -Wall -D_XOPEN_SOURCE=600 -D_XOPEN_SOURCE_EXTENTED -std=gnu99 -g
 
 
-VPATH=LIB/src/
-INCLUDE=LIB/include
+VPATH=../../LIB/src/
+INCLUDE=../../LIB/include
 
 #CLIBS=`pkg-config --cflags --libs allegro-5 allegro_acodec-5 allegro_audio-5 allegro_color-5 allegro_dialog-5 allegro_font-5 allegro_image-5 allegro_main-5 allegro_memfile-5 allegro_physfs-5 allegro_primitives-5 allegro_ttf-5`
 
@@ -64,7 +64,7 @@ else
 endif
 
 
-SRC=n_common.c n_log.c n_str.c n_list.c n_time.c n_thread_pool.c cJSON.c states_management.c n_fluids.c GiftDash.c
+SRC=n_common.c n_log.c n_str.c n_list.c n_time.c n_thread_pool.c cJSON.c states_management.c sledge_physics.c GiftDash.c
 OBJ=$(SRC:%.c=%.o)
 .c.o:
 	$(COMPILE.c) $<
