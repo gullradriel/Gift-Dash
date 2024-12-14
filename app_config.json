@@ -2,7 +2,7 @@
 	"width": 1200 ,
 	"height": 800 ,
 	"fullscreen": 0 ,
-	"bg-music": "DATA/Musics/background_music.ogg",
+	"bg-music": "DATA/Musics/Santa_Claus_Is_Coming_To_Town.ogg",
 	"drawFPS": 60.0 ,
 	"logicFPS": 120.0 
 }

@@ -1,37 +1,49 @@
-#include <stdio.h>
 #include <math.h>
+#include <stdio.h>
 
 // Constants
-#define MAX_SPEED 100.0f        // Maximum speed in units per second
-#define ACCELERATION 10.0f      // Acceleration rate in units per second^2
-#define BRAKE_FORCE 20.0f       // Brake deceleration rate in units per second^2
-#define STEERING_ANGLE 5.0f     // Steering angle in degrees per input
-#define DRIFT_FACTOR 0.1f       // Drift decay factor (0 = no decay, 1 = full decay)
-#define SKID_FRICTION 0.9f      // Friction coefficient for skid (0 = slippery, 1 = high grip)
-#define DELTA_TIME 0.1f         // Simulation time step in seconds
-#define PI 3.14159265359f       // Pi constant for trigonometric calculations
+//
+// Maximum speed in pixels per second
+#define MAX_SPEED 2000.0f
+// Acceleration rate in pixels per second^2
+#define ACCELERATION 400.0f
+// Brake deceleration rate in pixels per second^2
+#define BRAKE_FORCE 800.0f
+// Steering angle in degrees per input
+#define STEERING_ANGLE 5.0f
+// Pi constant for trigonometric calculations
+#define PI 3.14159265359f
 
 // VEHICLE structure
 typedef struct VEHICLE {
-    float x, y;             // Position in units
-    float speed;            // Forward speed in units per second
-    float direction;        // Direction in degrees (0 = right, 90 = up)
-    float drift_angle;      // Drift offset in degrees
-    float lateral_velocity; // Lateral velocity in units per second
-    float mass;             // Mass in kilograms
+    double x, y;              // Position in units
+    double speed;             // Forward speed in units per second
+    double direction;         // Direction in degrees (0 = right, 90 = up)
+    double angular_velocity;  // Rotation speed in degrees per second
+    double slip_angle;        // Angle of lateral slip in degrees
+    double handbrake;         // Handbrake state (0 = off, 1 = fully on)
+
+    // vehicle properties
+    double slip_factor;                  // make the vehicle slide more or less sideways (0.0 to 5.0)
+    double angular_velocity_multiplier;  // amount of rotational spin (100.0 or more)
+    double drag_multiplier;              // friction reduction (1.5 or more)
+    double slip_angle_limits;            // clamp the maximum slip angle (default: 45.0)
+
 } VEHICLE;
 
 // Initialize a VEHICLE
-void initVehicle(VEHICLE *vehicle, float startX, float startY, float mass);
+void init_vehicle(VEHICLE* vehicle, double startX, double startY);
+// Set properties
+void set_vehicle_properties(VEHICLE* vehicle, double slip_factor, double slip_angle_limits, double angular_velocity_multiplier, double drag_multiplier);
 // Accelerate the VEHICLE
-void accelerateVehicle(VEHICLE *vehicle);
+void accelerate_vehicle(VEHICLE* vehicle, double delta_time);
 // Brake the VEHICLE
-void brakeVehicle(VEHICLE *vehicle);
-// Steer the VEHICLE (adjust direction and induce lateral velocity)
-void steerVehicle(VEHICLE *vehicle, float angle);
-// Apply drifting effect
-void driftVehicle(VEHICLE *vehicle, float driftAngle);
+void brake_vehicle(VEHICLE* vehicle, double delta_time);
+// Steer the VEHICLE
+void steer_vehicle(VEHICLE* vehicle, double angle);
+// Apply handbrake to the VEHICLE
+void set_handbrake(VEHICLE* vehicle, double value);
 // Update VEHICLE position and physics
-void updateVehicle(VEHICLE *vehicle);
+void update_vehicle(VEHICLE* vehicle, double delta_time);
 // Display VEHICLE status
-void printVehicle(const VEHICLE *vehicle);
+void print_vehicle(const VEHICLE* vehicle);
