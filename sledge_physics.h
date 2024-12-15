@@ -1,5 +1,10 @@
 #include <math.h>
 #include <stdio.h>
+#include <stdbool.h>
+
+#include <allegro5/allegro.h>
+#include <allegro5/allegro_image.h>
+#include <allegro5/allegro_primitives.h>
 
 // Constants
 //
@@ -47,3 +52,25 @@ void set_handbrake(VEHICLE* vehicle, double value);
 void update_vehicle(VEHICLE* vehicle, double delta_time);
 // Display VEHICLE status
 void print_vehicle(const VEHICLE* vehicle);
+
+// Rectangle structure
+typedef struct {
+    double x, y;      // Top-left corner
+    double width, height; // Dimensions
+} Rectangle;
+
+// Vector structure for SAT
+typedef struct {
+    double x, y;
+} Vector;
+
+// Function prototypes
+// void calculate_rotated_corners(double dx, double dy, double cx, double cy, double width, double height, double angle, Vector corners[4]);
+// bool sat_collision(Vector rectA[4], Vector rectB[4]);
+// Vector subtract_vectors(Vector a, Vector b);
+// double dot_product(Vector a, Vector b);
+// Vector perpendicular(Vector v);
+// double min_projection(Vector axis, Vector corners[4]);
+// double max_projection(Vector axis, Vector corners[4]);
+bool check_collision(ALLEGRO_BITMAP *bitmap, double cx, double cy, double dx, double dy, double angle, Rectangle rect); 
+void debug_draw_rotated_bitmap(ALLEGRO_BITMAP *bitmap, double cx, double cy, double dx, double dy, double angle);

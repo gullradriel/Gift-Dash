@@ -7,13 +7,13 @@
 
 #include <locale.h>
 
-#include "allegro5/allegro_acodec.h"
-#include "allegro5/allegro_audio.h"
 #include <allegro5/allegro.h>
 #include <allegro5/allegro_font.h>
 #include <allegro5/allegro_image.h>
 #include <allegro5/allegro_primitives.h>
 #include <allegro5/allegro_ttf.h>
+#include "allegro5/allegro_acodec.h"
+#include "allegro5/allegro_audio.h"
 
 #include "nilorea/n_common.h"
 #include "nilorea/n_list.h"
@@ -281,12 +281,14 @@ int main(int argc, char* argv[]) {
         }
         al_play_sample(sample_data[0], 1, 0, 1, ALLEGRO_PLAYMODE_LOOP, NULL);
     }
+    ALLEGRO_BITMAP *santaSledgebmp = NULL ;
+	__n_assert( ( santaSledgebmp = al_load_bitmap( "DATA/Gfxs/santaSledge.png"  ) )     , n_log( LOG_ERR , "load bitmap DATA/Gfxs/santaSledge.png returned null" ); exit( 1 ); );
 
     VEHICLE santaSledge;
     init_vehicle(&santaSledge, WIDTH / 2, HEIGHT / 2);
 
     PARTICLE_SYSTEM* particle_system=NULL;
-    init_particle_system(&particle_system, 5000, 0, 0, 0, 100);
+    init_particle_system(&particle_system, INT_MAX, 0, 0, 0, 100);
 
     thread_pool = new_thread_pool(get_nb_cpu_cores(), 0);
 
@@ -304,8 +306,12 @@ int main(int argc, char* argv[]) {
 
     bitmap = al_create_bitmap(WIDTH, HEIGHT);
 
+    // Test rectangle
+    Rectangle testRect = {300, 250, 100, 100};
+
     size_t logic_duration = 0;
     size_t drawing_duration = 0;
+    bool collision = false ;
     do {
         // consume events
         do {
@@ -529,10 +535,24 @@ int main(int argc, char* argv[]) {
                 // n_log( LOG_DEBUG , "mouse button: %d" , mouse_button );
             }
 
+            static int old_mx = -1, old_my = -1;
+            double mx_delta = 0.0, my_delta = 0.0;
+            if (old_mx != mx || old_my != my) {
+                if (old_mx != -1 && old_my != -1) {
+                    mx_delta = (old_mx - mx);
+                    my_delta = (old_my - my);
+                }
+                old_mx = mx;
+                old_my = my;
+            }
+
+            santaSledge.x -= mx_delta ;
+            santaSledge.y -= my_delta ;
+
             if (santaSledge.handbrake) {
                 
                 double x1=0,y1=0,x2=0,y2=0;
-                calculate_perpendicular_points( santaSledge.x, santaSledge.y, santaSledge.direction, 5.0, &x1, &y1, &x2, &y2);
+                calculate_perpendicular_points( santaSledge.x, santaSledge.y, santaSledge.direction, 10.0, &x1, &y1, &x2, &y2);
                 
                 PHYSICS tmp_part;
                 memset(&tmp_part, 0, sizeof(PHYSICS));
@@ -540,26 +560,15 @@ int main(int argc, char* argv[]) {
                 tmp_part.type = 1;
                 VECTOR3D_SET(tmp_part.speed, 0.0, 0.0, 0.0);
                 VECTOR3D_SET(tmp_part.position, x1, y1, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 10000000, -1, al_map_rgba(rand()%250, rand()%250, rand()%250, rand() % 100), tmp_part);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, -1, al_map_rgba(rand()%250, rand()%250, rand()%250, rand() % 100), tmp_part);
                 VECTOR3D_SET(tmp_part.position, x2, y2, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 10000000, -1, al_map_rgba(rand()%250, rand()%250, rand()%250, rand() % 100), tmp_part);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, -1, al_map_rgba(rand()%250, rand()%250, rand()%250, rand() % 100), tmp_part);
             }
 
-            manage_particle(particle_system);
-
-            static int old_mx = -1, old_my = -1;
-            double vx = 0.0, vy = 0.0;
-            if (old_mx != mx || old_my != my) {
-                if (old_mx != -1 && old_my != -1) {
-                    vx = (old_mx - mx) / logicFPS;
-                    vy = (old_my - my) / logicFPS;
-                }
-                old_mx = mx;
-                old_my = my;
-            }
+            manage_particle_ex(particle_system,1000000000/logicFPS);
 
             update_vehicle(&santaSledge, 1.0 / logicFPS);
-            print_vehicle(&santaSledge);
+            //print_vehicle(&santaSledge);
 
             if (santaSledge.x < 0)
                 santaSledge.x = WIDTH;
@@ -569,6 +578,11 @@ int main(int argc, char* argv[]) {
                 santaSledge.y = HEIGHT;
             if (santaSledge.y > HEIGHT)
                 santaSledge.y = 0;
+
+            // Check collision
+            //collision = check_bitmap_vs_rectangle(santaSledge.x, santaSledge.y, al_get_bitmap_width(santaSledgebmp),al_get_bitmap_height(santaSledgebmp), DEG_TO_RAD(santaSledge.direction), testRect);
+
+            collision = check_collision( santaSledgebmp,0, al_get_bitmap_height(santaSledgebmp) / 2.0, santaSledge.x, santaSledge.y, DEG_TO_RAD(santaSledge.direction), testRect);
 
             logic_duration = (logic_duration + get_usec(&logic_chrono)) / 2;
             do_logic = 0;
@@ -593,25 +607,35 @@ int main(int argc, char* argv[]) {
             // draw particles 
             draw_particle(particle_system, 0, 0, w, h, 50);
 
-            // draw mouse
-            al_draw_circle(mx, my - 36, 32, al_map_rgb(255, 0, 0), 2.0);
-            al_draw_circle(mx, my + 36, 32, al_map_rgb(255, 0, 0), 2.0);
+            //show car DEBUG
+            if( get_log_level() == LOG_DEBUG )
+            {
+                //draw sledge and collision point
+                debug_draw_rotated_bitmap(santaSledgebmp, 0, al_get_bitmap_height(santaSledgebmp) / 2.0, santaSledge.x, santaSledge.y, DEG_TO_RAD(santaSledge.direction));
+                // draw mouse
+                al_draw_circle(mx, my, 16, al_map_rgb(255, 0, 0), 2.0);
+                // draw sledge position
+                al_draw_circle(santaSledge.x, santaSledge.y, 20, al_map_rgb(255, 255, 0), 3.0);
+                double car_angle = (santaSledge.direction * M_PI) / 180.0;
+                double length = 10;
+                double end_x = santaSledge.x + length * cos(car_angle);
+                double end_y = santaSledge.y + length * sin(car_angle);
+                //draw direction
+                al_draw_line(santaSledge.x, santaSledge.y, end_x, end_y, al_map_rgb(255, 255, 0), 2.0);
+                // print  speed
+                static N_STR* textout = NULL;
+                nstrprintf(textout, "Speed: %f", santaSledge.speed);
+                al_draw_text(font, al_map_rgb(0, 0, 255), WIDTH, 10, ALLEGRO_ALIGN_RIGHT, _nstr(textout));
+            }
+            else
+            {
+                // draw santaSledge
+                al_draw_rotated_bitmap(santaSledgebmp, 0, al_get_bitmap_height(santaSledgebmp) / 2.0, santaSledge.x, santaSledge.y, DEG_TO_RAD(santaSledge.direction), 0);
+            }
 
-            // draw santaSledge
-            al_draw_circle(santaSledge.x, santaSledge.y, 20, al_map_rgb(255, 255, 0),
-                           3.0);
-
-            // show car angle DEBUG
-            double car_angle = (santaSledge.direction * M_PI) / 180.0;
-            double length = 10;
-            double end_x = santaSledge.x + length * cos(car_angle);
-            double end_y = santaSledge.y + length * sin(car_angle);
-            al_draw_line(santaSledge.x, santaSledge.y, end_x, end_y,
-                         al_map_rgb(255, 255, 0), 2.0);
-
-            static N_STR* textout = NULL;
-            nstrprintf(textout, "Speed: %f", santaSledge.speed);
-            al_draw_text(font, al_map_rgb(0, 0, 255), WIDTH, 10, ALLEGRO_ALIGN_RIGHT, _nstr(textout));
+            // Draw result
+            al_draw_rectangle(testRect.x, testRect.y, testRect.x + testRect.width, testRect.y + testRect.height,
+                      collision ? al_map_rgb(255, 0, 0) : al_map_rgb(0, 255, 0), 2);
 
             if (!backbuffer) {
                 al_unlock_bitmap(scrbuf);

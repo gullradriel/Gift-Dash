@@ -149,3 +149,147 @@ void print_vehicle(const VEHICLE* vehicle) {
     n_log(LOG_DEBUG, "Position: (%.2f, %.2f), Speed: %.2f units/s, Direction: %.2f°",
           vehicle->x, vehicle->y, vehicle->speed, vehicle->direction);
 }
+
+void calculate_rotated_corners(double dx, double dy, double cx, double cy, 
+                               double width, double height, double angle, Vector corners[4]) {
+    // Bitmap corners relative to its center of rotation (cx, cy)
+    Vector points[4] = {
+        {-cx, -cy},            // Top-left relative to cx, cy
+        {width - cx, -cy},     // Top-right relative to cx, cy
+        {width - cx, height - cy}, // Bottom-right relative to cx, cy
+        {-cx, height - cy}     // Bottom-left relative to cx, cy
+    };
+
+    // Rotate each corner around the center `(cx, cy)` and translate to `(dx, dy)`
+    double cosA = cos(angle);
+    double sinA = sin(angle);
+
+    for (int i = 0; i < 4; i++) {
+        corners[i].x = dx + (points[i].x * cosA - points[i].y * sinA);
+        corners[i].y = dy + (points[i].x * sinA + points[i].y * cosA);
+    }
+}
+
+// Subtract two vectors
+Vector subtract_vectors(Vector a, Vector b) {
+    Vector result = {a.x - b.x, a.y - b.y};
+    return result;
+}
+
+// Dot product of two vectors
+double dot_product(Vector a, Vector b) {
+    return a.x * b.x + a.y * b.y;
+}
+
+// Get perpendicular vector
+Vector perpendicular(Vector v) {
+    Vector result = {-v.y, v.x};
+    return result;
+}
+
+// Get the minimum projection of corners onto an axis
+double min_projection(Vector axis, Vector corners[4]) {
+    double min = dot_product(axis, corners[0]);
+    for (int i = 1; i < 4; i++) {
+        double projection = dot_product(axis, corners[i]);
+        if (projection < min) min = projection;
+    }
+    return min;
+}
+
+// Get the maximum projection of corners onto an axis
+double max_projection(Vector axis, Vector corners[4]) {
+    double max = dot_product(axis, corners[0]);
+    for (int i = 1; i < 4; i++) {
+        double projection = dot_product(axis, corners[i]);
+        if (projection > max) max = projection;
+    }
+    return max;
+}
+
+// project polygon on axis
+void project_polygon(Vector poly[4], int count, Vector axis, double *min, double *max) {
+    *min = *max = (poly[0].x * axis.x + poly[0].y * axis.y);
+    for (int i = 1; i < count; i++) {
+        double projection = (poly[i].x * axis.x + poly[i].y * axis.y);
+        if (projection < *min) *min = projection;
+        if (projection > *max) *max = projection;
+    }
+}
+
+// check overlap on axis
+bool overlap_on_axis(Vector poly1[4], Vector poly2[4], Vector axis) {
+    // Project poly1 and poly2 onto the axis
+    double min1, max1, min2, max2;
+    project_polygon(poly1, 4, axis, &min1, &max1);
+    project_polygon(poly2, 4, axis, &min2, &max2);
+
+    // Check if projections overlap
+    return !(max1 < min2 || max2 < min1);
+}
+
+// separated axis theorem collision
+bool sat_collision(Vector poly1[4], Vector poly2[4]) {
+    // Check axes of poly1
+    for (int i = 0; i < 4; i++) {
+        Vector edge = {poly1[(i + 1) % 4].x - poly1[i].x, poly1[(i + 1) % 4].y - poly1[i].y};
+        Vector axis = {-edge.y, edge.x}; // Perpendicular axis
+
+        if (!overlap_on_axis(poly1, poly2, axis)) {
+            return false;
+        }
+    }
+
+    // Check axes of poly2
+    for (int i = 0; i < 4; i++) {
+        Vector edge = {poly2[(i + 1) % 4].x - poly2[i].x, poly2[(i + 1) % 4].y - poly2[i].y};
+        Vector axis = {-edge.y, edge.x}; // Perpendicular axis
+
+        if (!overlap_on_axis(poly1, poly2, axis)) {
+            return false;
+        }
+    }
+
+    return true; // Collision detected on all axes
+}
+
+// check collisions between rotated bitmap and a rect
+bool check_collision(ALLEGRO_BITMAP *bitmap, double cx, double cy, double dx, double dy, 
+                     double angle, Rectangle rect) {
+    Vector bitmap_corners[4];
+    double bitmap_width = al_get_bitmap_width(bitmap);
+    double bitmap_height = al_get_bitmap_height(bitmap);
+
+    // Calculate the rotated corners of the bitmap
+    calculate_rotated_corners(dx, dy, cx, cy, bitmap_width, bitmap_height, angle, bitmap_corners);
+
+    // Get the rectangle's corners
+    Vector rect_corners[4] = {
+        {rect.x, rect.y},                      // Top-left
+        {rect.x + rect.width, rect.y},         // Top-right
+        {rect.x + rect.width, rect.y + rect.height}, // Bottom-right
+        {rect.x, rect.y + rect.height}         // Bottom-left
+    };
+
+    // Check for collision using SAT
+    return sat_collision(bitmap_corners, rect_corners);
+}
+
+// draw debug collision box
+void debug_draw_rotated_bitmap(ALLEGRO_BITMAP *bitmap, double cx, double cy, double dx, double dy, double angle) {
+    Vector corners[4];
+    double width = al_get_bitmap_width(bitmap);
+    double height = al_get_bitmap_height(bitmap);
+
+    calculate_rotated_corners(dx, dy, cx, cy, width, height, angle, corners);
+
+    // Draw the rotated bitmap
+    al_draw_rotated_bitmap(bitmap, cx, cy, dx, dy, angle, 0);
+
+    // Draw collision bounds
+    for (int i = 0; i < 4; i++) {
+        Vector start = corners[i];
+        Vector end = corners[(i + 1) % 4];
+        al_draw_line(start.x, start.y, end.x, end.y, al_map_rgb(0, 255, 0), 2);
+    }
+}
