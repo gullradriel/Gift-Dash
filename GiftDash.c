@@ -535,6 +535,7 @@ int main(int argc, char* argv[]) {
                 // n_log( LOG_DEBUG , "mouse button: %d" , mouse_button );
             }
 
+            /* 
             static int old_mx = -1, old_my = -1;
             double mx_delta = 0.0, my_delta = 0.0;
             if (old_mx != mx || old_my != my) {
@@ -548,11 +549,12 @@ int main(int argc, char* argv[]) {
 
             santaSledge.x -= mx_delta ;
             santaSledge.y -= my_delta ;
+            */
 
             if (santaSledge.handbrake) {
                 
                 double x1=0,y1=0,x2=0,y2=0;
-                calculate_perpendicular_points( santaSledge.x, santaSledge.y, santaSledge.direction, 10.0, &x1, &y1, &x2, &y2);
+                calculate_perpendicular_points( santaSledge.x, santaSledge.y, santaSledge.direction, 20.0, &x1, &y1, &x2, &y2);
                 
                 PHYSICS tmp_part;
                 memset(&tmp_part, 0, sizeof(PHYSICS));
