@@ -63,7 +63,7 @@ else
 endif
 
 
-SRC=n_common.c n_log.c n_str.c n_list.c n_time.c n_thread_pool.c cJSON.c states_management.c sledge_physics.c GiftDash.c
+SRC=n_common.c n_log.c n_str.c n_list.c n_time.c n_thread_pool.c n_3d.c n_particles.c cJSON.c states_management.c sledge_physics.c GiftDash.c
 OBJ=$(SRC:%.c=%.o)
 .c.o:
 	$(COMPILE.c) $<

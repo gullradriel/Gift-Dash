@@ -7,16 +7,6 @@
 
 #include <locale.h>
 
-#include "nilorea/n_common.h"
-#include "nilorea/n_list.h"
-#include "nilorea/n_log.h"
-#include "nilorea/n_str.h"
-#include "nilorea/n_thread_pool.h"
-#include "nilorea/n_time.h"
-
-#include "sledge_physics.h"
-#include "states_management.h"
-
 #include "allegro5/allegro_acodec.h"
 #include "allegro5/allegro_audio.h"
 #include <allegro5/allegro.h>
@@ -24,6 +14,17 @@
 #include <allegro5/allegro_image.h>
 #include <allegro5/allegro_primitives.h>
 #include <allegro5/allegro_ttf.h>
+
+#include "nilorea/n_common.h"
+#include "nilorea/n_list.h"
+#include "nilorea/n_log.h"
+#include "nilorea/n_str.h"
+#include "nilorea/n_thread_pool.h"
+#include "nilorea/n_time.h"
+#include "nilorea/n_particles.h"
+
+#include "sledge_physics.h"
+#include "states_management.h"
 
 #define RESERVED_SAMPLES 16
 #define MAX_SAMPLE_DATA 10
@@ -51,6 +52,29 @@ bool fullscreen = 0;
 char* bgmusic = NULL;
 
 THREAD_POOL* thread_pool = NULL;
+
+#define DEG_TO_RAD(angleDegrees) ((angleDegrees) * M_PI / 180.0)
+
+void calculate_perpendicular_points(double x, double y, double direction, double distance, 
+                                    double *x1, double *y1, double *x2, double *y2) {
+    // Convert direction to radians
+    double angleRad = DEG_TO_RAD(direction);
+
+    // Calculate the perpendicular angle (relative to direction)
+    double perpAngle = angleRad + M_PI / 2; // Perpendicular at +90 degrees
+
+    // Calculate the offsets
+    double xOffset = distance * cos(perpAngle);
+    double yOffset = distance * sin(perpAngle);
+
+    // First perpendicular point
+    *x1 = x + xOffset;
+    *y1 = y + yOffset;
+
+    // Second perpendicular point (opposite direction)
+    *x2 = x - xOffset;
+    *y2 = y - yOffset;
+}
 
 int main(int argc, char* argv[]) {
     /* Set the locale to the POSIX C environment */
@@ -260,6 +284,9 @@ int main(int argc, char* argv[]) {
 
     VEHICLE santaSledge;
     init_vehicle(&santaSledge, WIDTH / 2, HEIGHT / 2);
+
+    PARTICLE_SYSTEM* particle_system=NULL;
+    init_particle_system(&particle_system, 5000, 0, 0, 0, 100);
 
     thread_pool = new_thread_pool(get_nb_cpu_cores(), 0);
 
@@ -502,6 +529,24 @@ int main(int argc, char* argv[]) {
                 // n_log( LOG_DEBUG , "mouse button: %d" , mouse_button );
             }
 
+            if (santaSledge.handbrake) {
+                
+                double x1=0,y1=0,x2=0,y2=0;
+                calculate_perpendicular_points( santaSledge.x, santaSledge.y, santaSledge.direction, 5.0, &x1, &y1, &x2, &y2);
+                
+                PHYSICS tmp_part;
+                memset(&tmp_part, 0, sizeof(PHYSICS));
+                tmp_part.sz = rand() % 10;
+                tmp_part.type = 1;
+                VECTOR3D_SET(tmp_part.speed, 0.0, 0.0, 0.0);
+                VECTOR3D_SET(tmp_part.position, x1, y1, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 10000000, -1, al_map_rgba(rand()%250, rand()%250, rand()%250, rand() % 100), tmp_part);
+                VECTOR3D_SET(tmp_part.position, x2, y2, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 10000000, -1, al_map_rgba(rand()%250, rand()%250, rand()%250, rand() % 100), tmp_part);
+            }
+
+            manage_particle(particle_system);
+
             static int old_mx = -1, old_my = -1;
             double vx = 0.0, vy = 0.0;
             if (old_mx != mx || old_my != my) {
@@ -542,13 +587,17 @@ int main(int argc, char* argv[]) {
                 al_lock_bitmap(scrbuf, al_get_bitmap_format(scrbuf),
                                ALLEGRO_LOCK_READWRITE);
 
-            //
-            // draw gift dash world here
-            //
+            // clear screen
             al_clear_to_color(al_map_rgb(0, 0, 0));
+
+            // draw particles 
+            draw_particle(particle_system, 0, 0, w, h, 50);
+
+            // draw mouse
             al_draw_circle(mx, my - 36, 32, al_map_rgb(255, 0, 0), 2.0);
             al_draw_circle(mx, my + 36, 32, al_map_rgb(255, 0, 0), 2.0);
 
+            // draw santaSledge
             al_draw_circle(santaSledge.x, santaSledge.y, 20, al_map_rgb(255, 255, 0),
                            3.0);
 
