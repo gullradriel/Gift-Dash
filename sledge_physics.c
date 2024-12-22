@@ -3,6 +3,26 @@
 #include <stdio.h>
 #include "nilorea/n_log.h"
 
+void calculate_perpendicular_points(double x, double y, double direction, double distance, double* x1, double* y1, double* x2, double* y2) {
+    // Convert direction to radians
+    double angleRad = DEG_TO_RAD(direction);
+
+    // Calculate the perpendicular angle (relative to direction)
+    double perpAngle = angleRad + M_PI / 2;  // Perpendicular at +90 degrees
+
+    // Calculate the offsets
+    double xOffset = distance * cos(perpAngle);
+    double yOffset = distance * sin(perpAngle);
+
+    // First perpendicular point
+    *x1 = x + xOffset;
+    *y1 = y + yOffset;
+
+    // Second perpendicular point (opposite direction)
+    *x2 = x - xOffset;
+    *y2 = y - yOffset;
+}
+
 // Initialize a vehicle
 void init_vehicle(VEHICLE* vehicle, double startX, double startY) {
     vehicle->x = startX;        // Initial X position
@@ -150,14 +170,13 @@ void print_vehicle(const VEHICLE* vehicle) {
           vehicle->x, vehicle->y, vehicle->speed, vehicle->direction);
 }
 
-void calculate_rotated_corners(double dx, double dy, double cx, double cy, 
-                               double width, double height, double angle, Vector corners[4]) {
+void calculate_rotated_corners(double dx, double dy, double cx, double cy, double width, double height, double angle, Vector corners[4]) {
     // Bitmap corners relative to its center of rotation (cx, cy)
     Vector points[4] = {
-        {-cx, -cy},            // Top-left relative to cx, cy
-        {width - cx, -cy},     // Top-right relative to cx, cy
-        {width - cx, height - cy}, // Bottom-right relative to cx, cy
-        {-cx, height - cy}     // Bottom-left relative to cx, cy
+        {-cx, -cy},                 // Top-left relative to cx, cy
+        {width - cx, -cy},          // Top-right relative to cx, cy
+        {width - cx, height - cy},  // Bottom-right relative to cx, cy
+        {-cx, height - cy}          // Bottom-left relative to cx, cy
     };
 
     // Rotate each corner around the center `(cx, cy)` and translate to `(dx, dy)`
@@ -208,7 +227,7 @@ double max_projection(Vector axis, Vector corners[4]) {
 }
 
 // project polygon on axis
-void project_polygon(Vector poly[4], int count, Vector axis, double *min, double *max) {
+void project_polygon(Vector poly[4], int count, Vector axis, double* min, double* max) {
     *min = *max = (poly[0].x * axis.x + poly[0].y * axis.y);
     for (int i = 1; i < count; i++) {
         double projection = (poly[i].x * axis.x + poly[i].y * axis.y);
@@ -233,7 +252,7 @@ bool sat_collision(Vector poly1[4], Vector poly2[4]) {
     // Check axes of poly1
     for (int i = 0; i < 4; i++) {
         Vector edge = {poly1[(i + 1) % 4].x - poly1[i].x, poly1[(i + 1) % 4].y - poly1[i].y};
-        Vector axis = {-edge.y, edge.x}; // Perpendicular axis
+        Vector axis = {-edge.y, edge.x};  // Perpendicular axis
 
         if (!overlap_on_axis(poly1, poly2, axis)) {
             return false;
@@ -243,19 +262,18 @@ bool sat_collision(Vector poly1[4], Vector poly2[4]) {
     // Check axes of poly2
     for (int i = 0; i < 4; i++) {
         Vector edge = {poly2[(i + 1) % 4].x - poly2[i].x, poly2[(i + 1) % 4].y - poly2[i].y};
-        Vector axis = {-edge.y, edge.x}; // Perpendicular axis
+        Vector axis = {-edge.y, edge.x};  // Perpendicular axis
 
         if (!overlap_on_axis(poly1, poly2, axis)) {
             return false;
         }
     }
 
-    return true; // Collision detected on all axes
+    return true;  // Collision detected on all axes
 }
 
 // check collisions between rotated bitmap and a rect
-bool check_collision(ALLEGRO_BITMAP *bitmap, double cx, double cy, double dx, double dy, 
-                     double angle, Rectangle rect) {
+bool check_collision(ALLEGRO_BITMAP* bitmap, double cx, double cy, double dx, double dy, double angle, Rectangle rect) {
     Vector bitmap_corners[4];
     double bitmap_width = al_get_bitmap_width(bitmap);
     double bitmap_height = al_get_bitmap_height(bitmap);
@@ -265,10 +283,10 @@ bool check_collision(ALLEGRO_BITMAP *bitmap, double cx, double cy, double dx, do
 
     // Get the rectangle's corners
     Vector rect_corners[4] = {
-        {rect.x, rect.y},                      // Top-left
-        {rect.x + rect.width, rect.y},         // Top-right
-        {rect.x + rect.width, rect.y + rect.height}, // Bottom-right
-        {rect.x, rect.y + rect.height}         // Bottom-left
+        {rect.x, rect.y},                             // Top-left
+        {rect.x + rect.width, rect.y},                // Top-right
+        {rect.x + rect.width, rect.y + rect.height},  // Bottom-right
+        {rect.x, rect.y + rect.height}                // Bottom-left
     };
 
     // Check for collision using SAT
@@ -276,7 +294,7 @@ bool check_collision(ALLEGRO_BITMAP *bitmap, double cx, double cy, double dx, do
 }
 
 // draw debug collision box
-void debug_draw_rotated_bitmap(ALLEGRO_BITMAP *bitmap, double cx, double cy, double dx, double dy, double angle) {
+void debug_draw_rotated_bitmap(ALLEGRO_BITMAP* bitmap, double cx, double cy, double dx, double dy, double angle) {
     Vector corners[4];
     double width = al_get_bitmap_width(bitmap);
     double height = al_get_bitmap_height(bitmap);

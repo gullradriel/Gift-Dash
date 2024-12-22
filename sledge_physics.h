@@ -19,6 +19,9 @@
 // Pi constant for trigonometric calculations
 #define PI 3.14159265359f
 
+// Convert degrees to radians
+#define DEG_TO_RAD(angleDegrees) ((angleDegrees)*M_PI / 180.0)
+
 // VEHICLE structure
 typedef struct VEHICLE {
     double x, y;              // Position in units
@@ -36,6 +39,8 @@ typedef struct VEHICLE {
 
 } VEHICLE;
 
+// calculate points perpandicular to a (x,y) source point and a direction
+void calculate_perpendicular_points(double x, double y, double direction, double distance, double* x1, double* y1, double* x2, double* y2);
 // Initialize a VEHICLE
 void init_vehicle(VEHICLE* vehicle, double startX, double startY);
 // Set properties
@@ -55,8 +60,8 @@ void print_vehicle(const VEHICLE* vehicle);
 
 // Rectangle structure
 typedef struct {
-    double x, y;      // Top-left corner
-    double width, height; // Dimensions
+    double x, y;           // Top-left corner
+    double width, height;  // Dimensions
 } Rectangle;
 
 // Vector structure for SAT
@@ -72,5 +77,5 @@ typedef struct {
 // Vector perpendicular(Vector v);
 // double min_projection(Vector axis, Vector corners[4]);
 // double max_projection(Vector axis, Vector corners[4]);
-bool check_collision(ALLEGRO_BITMAP *bitmap, double cx, double cy, double dx, double dy, double angle, Rectangle rect); 
-void debug_draw_rotated_bitmap(ALLEGRO_BITMAP *bitmap, double cx, double cy, double dx, double dy, double angle);
+bool check_collision(ALLEGRO_BITMAP* bitmap, double cx, double cy, double dx, double dy, double angle, Rectangle rect);
+void debug_draw_rotated_bitmap(ALLEGRO_BITMAP* bitmap, double cx, double cy, double dx, double dy, double angle);

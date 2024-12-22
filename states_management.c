@@ -14,7 +14,7 @@
 #include "cJSON.h"
 #include "nilorea/n_str.h"
 
-int load_app_state(char* state_filename, size_t* WIDTH, size_t* HEIGHT, bool* fullscreen, char** bgmusic, double* drawFPS, double* logicFPS) {
+int load_app_state(char* state_filename, long int* WIDTH, long int* HEIGHT, bool* fullscreen, char** bgmusic, double* drawFPS, double* logicFPS) {
     __n_assert(state_filename, return FALSE);
 
     if (access(state_filename, F_OK) != 0) {

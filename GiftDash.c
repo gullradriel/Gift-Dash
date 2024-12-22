@@ -29,8 +29,6 @@
 #define RESERVED_SAMPLES 16
 #define MAX_SAMPLE_DATA 10
 
-ALLEGRO_DISPLAY* display = NULL;
-
 /******************************************************************************
  *                           VARIOUS DECLARATIONS                             *
  ******************************************************************************/
@@ -42,39 +40,61 @@ int DONE = 0,            /* Flag to check if we are always running */
 double drawFPS = 60.0;
 double logicFPS = 240.0;
 
+ALLEGRO_DISPLAY* display = NULL;
 ALLEGRO_TIMER* fps_timer = NULL;
 ALLEGRO_TIMER* logic_timer = NULL;
+ALLEGRO_SAMPLE* sample_data[MAX_SAMPLE_DATA] = {NULL};
+ALLEGRO_EVENT_QUEUE* event_queue = NULL;
+
 N_TIME logic_chrono;
 N_TIME drawing_chrono;
 
-size_t WIDTH = 1280, HEIGHT = 800;
+long int WIDTH = 1280, HEIGHT = 800;
 bool fullscreen = 0;
 char* bgmusic = NULL;
 
 THREAD_POOL* thread_pool = NULL;
 
-#define DEG_TO_RAD(angleDegrees) ((angleDegrees) * M_PI / 180.0)
+// Test rectangle
+Rectangle testRect = {300, 250, 100, 100};
+size_t logic_duration = 0;
+size_t drawing_duration = 0;
+bool collision = false;
 
-void calculate_perpendicular_points(double x, double y, double direction, double distance, 
-                                    double *x1, double *y1, double *x2, double *y2) {
-    // Convert direction to radians
-    double angleRad = DEG_TO_RAD(direction);
+bool backbuffer = 1;
+ALLEGRO_BITMAP* png_good = NULL;
+ALLEGRO_BITMAP* png_evil = NULL;
+ALLEGRO_BITMAP* scrbuf = NULL;
+ALLEGRO_BITMAP* bitmap = NULL;
+ALLEGRO_BITMAP* christmasPresents[16];
+ALLEGRO_BITMAP* bogeymanPresents[16];
 
-    // Calculate the perpendicular angle (relative to direction)
-    double perpAngle = angleRad + M_PI / 2; // Perpendicular at +90 degrees
+bool do_draw = 1, do_logic = 1;
+int mx = 0, my = 0, mouse_button = 0, mouse_b1 = 0, mouse_b2 = 0;
 
-    // Calculate the offsets
-    double xOffset = distance * cos(perpAngle);
-    double yOffset = distance * sin(perpAngle);
+int key[19] = {false, false, false, false, false, false, false, false, false,
+               false, false, false, false, false, false, false, false, false};
 
-    // First perpendicular point
-    *x1 = x + xOffset;
-    *y1 = y + yOffset;
+ALLEGRO_BITMAP* santaSledgebmp = NULL;
+VEHICLE santaSledge = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+PARTICLE_SYSTEM* particle_system = NULL;
 
-    // Second perpendicular point (opposite direction)
-    *x2 = x - xOffset;
-    *y2 = y - yOffset;
-}
+enum {
+    good,
+    evil };
+
+typedef struct gift_dash_object
+{
+    long int x;
+    long int y;
+    int type;
+    int id;
+}gift_dash_object;
+
+LIST *good_presents = NULL;
+LIST *bad_presents = NULL;
+
+double tx = 0, ty = 0;
 
 int main(int argc, char* argv[]) {
     /* Set the locale to the POSIX C environment */
@@ -201,10 +221,7 @@ int main(int argc, char* argv[]) {
         n_abort("Could not set up voice and mixer.\n");
     }
 
-    ALLEGRO_SAMPLE* sample_data[MAX_SAMPLE_DATA] = {NULL};
     memset(sample_data, 0, sizeof(sample_data));
-
-    ALLEGRO_EVENT_QUEUE* event_queue = NULL;
 
     event_queue = al_create_event_queue();
     if (!event_queue) {
@@ -218,9 +235,8 @@ int main(int argc, char* argv[]) {
         al_set_new_display_flags(ALLEGRO_OPENGL | ALLEGRO_WINDOWED);
     }
 
-    // not working under linux ask why
-    // al_set_new_bitmap_flags( ALLEGRO_VIDEO_BITMAP|ALLEGRO_NO_PRESERVE_TEXTURE
-    // );
+    // it's not working under linux. I don't know why.
+    // al_set_new_bitmap_flags( ALLEGRO_VIDEO_BITMAP|ALLEGRO_NO_PRESERVE_TEXTURE );
 
     display = al_create_display(WIDTH, HEIGHT);
     if (!display) {
@@ -231,11 +247,8 @@ int main(int argc, char* argv[]) {
 
     ALLEGRO_FONT* font = al_load_font("DATA/2Dumb.ttf", 18, 0);
 
-    DONE = 0;
     fps_timer = al_create_timer(1.0 / drawFPS);
     logic_timer = al_create_timer(1.0 / logicFPS);
-
-    al_register_event_source(event_queue, al_get_display_event_source(display));
     al_start_timer(fps_timer);
     al_start_timer(logic_timer);
     al_register_event_source(event_queue, al_get_timer_event_source(fps_timer));
@@ -244,35 +257,84 @@ int main(int argc, char* argv[]) {
     al_register_event_source(event_queue, al_get_keyboard_event_source());
     al_register_event_source(event_queue, al_get_mouse_event_source());
 
-    bool backbuffer = 1;
-    ALLEGRO_BITMAP* scrbuf = NULL;
-    ALLEGRO_BITMAP* bitmap = al_create_bitmap(WIDTH, HEIGHT);
+    al_register_event_source(event_queue, al_get_display_event_source(display));
+
+    bitmap = al_create_bitmap(WIDTH, HEIGHT);
 
     al_hide_mouse_cursor(display);
 
-    enum APP_KEYS {
-        KEY_UP,
-        KEY_DOWN,
-        KEY_LEFT,
-        KEY_RIGHT,
-        KEY_ESC,
-        KEY_SPACE,
-        KEY_CTRL,
-        KEY_SHIFT,
-        KEY_PAD_MINUS,
-        KEY_PAD_PLUS,
-        KEY_PAD_ENTER,
-        KEY_M,
-        KEY_W,
-        KEY_F1,
-        KEY_F2,
-        KEY_F3,
-        KEY_F4,
-        KEY_F5,
-        KEY_F6
-    };
-    int key[19] = {false, false, false, false, false, false, false, false, false,
-                   false, false, false, false, false, false, false, false, false};
+    int GRID_SIZE = 4 ;
+    int ICON_SIZE = 64 ;
+
+    // Load the PNG file containing the christmas icons
+    png_good = al_load_bitmap("DATA/Gfxs/ChristmasIcons.png");
+    if (!png_good) {
+        fprintf(stderr, "Failed to load ChristmasIcons PNG file.\n");
+        return -1;
+    }
+    // Loop through the grid (4x4) and extract each icon (64x64 pixels)
+    for (int i = 0; i < GRID_SIZE; i++) {
+        for (int j = 0; j < GRID_SIZE; j++) {
+            // Calculate the position of the current icon in the PNG
+            int x = j * ICON_SIZE;
+            int y = i * ICON_SIZE;
+
+            // Extract the icon and store it in the iconlist array
+            christmasPresents[i * GRID_SIZE + j] = al_create_sub_bitmap(png_good, x, y, ICON_SIZE, ICON_SIZE);
+            if (!christmasPresents[i * GRID_SIZE + j]) {
+                fprintf(stderr, "Failed to create sub bitmap.\n");
+                return -1;
+            }
+        }
+    }
+
+    // Load the PNG file containing the bogeyman icons
+    png_evil = al_load_bitmap("DATA/Gfxs/BogeymanIcons.png");
+    if (!png_evil) {
+        fprintf(stderr, "Failed to load BogeymanIcons PNG file.\n");
+        return -1;
+    }
+    // Loop through the grid (4x4) and extract each icon (64x64 pixels)
+    for (int i = 0; i < GRID_SIZE; i++) {
+        for (int j = 0; j < GRID_SIZE; j++) {
+            // Calculate the position of the current icon in the PNG
+            int x = j * ICON_SIZE;
+            int y = i * ICON_SIZE;
+
+            // Extract the icon and store it in the iconlist array
+            bogeymanPresents[i * GRID_SIZE + j] = al_create_sub_bitmap(png_evil, x, y, ICON_SIZE, ICON_SIZE);
+            if (!bogeymanPresents[i * GRID_SIZE + j]) {
+                fprintf(stderr, "Failed to create sub bitmap.\n");
+                return -1;
+            }
+        }
+    }
+
+    // init good and bad presents LIST
+    good_presents = new_generic_list( -1 );
+    bad_presents = new_generic_list( -1 );
+
+    for( int it = 0 ; it < 50 ; it ++ )
+    {
+        gift_dash_object *object = NULL ;
+        Malloc( object , gift_dash_object , 1 );
+        object -> x = (-4 * WIDTH) + rand()%((8*WIDTH)-64);
+        object -> y = (-4 * HEIGHT) + rand()%((8*HEIGHT)-64);
+        object -> type = good ;
+        object -> id = rand()%16 ;
+        list_push( good_presents , object , free );
+    }
+    for( int it = 0 ; it < 100 ; it ++ )
+    {
+        gift_dash_object *object = NULL ;
+        Malloc( object , gift_dash_object , 1 );
+        object -> x = (-4 * WIDTH) + rand()%((8*WIDTH)-64);
+        object -> y = (-4 * HEIGHT) + rand()%((8*HEIGHT)-64);
+        object -> type = evil ;
+        object -> id = rand()%16 ;
+        list_push( bad_presents , object , free );
+    }
+
 
     if (bgmusic) {
         if (!(sample_data[0] = al_load_sample(bgmusic))) {
@@ -281,22 +343,16 @@ int main(int argc, char* argv[]) {
         }
         al_play_sample(sample_data[0], 1, 0, 1, ALLEGRO_PLAYMODE_LOOP, NULL);
     }
-    ALLEGRO_BITMAP *santaSledgebmp = NULL ;
-	__n_assert( ( santaSledgebmp = al_load_bitmap( "DATA/Gfxs/santaSledge.png"  ) )     , n_log( LOG_ERR , "load bitmap DATA/Gfxs/santaSledge.png returned null" ); exit( 1 ); );
 
-    VEHICLE santaSledge;
+    __n_assert((santaSledgebmp = al_load_bitmap("DATA/Gfxs/santaSledge.png")), n_log(LOG_ERR, "load bitmap DATA/Gfxs/santaSledge.png returned null"); exit(1););
+
     init_vehicle(&santaSledge, WIDTH / 2, HEIGHT / 2);
 
-    PARTICLE_SYSTEM* particle_system=NULL;
     init_particle_system(&particle_system, INT_MAX, 0, 0, 0, 100);
 
     thread_pool = new_thread_pool(get_nb_cpu_cores(), 0);
 
     n_log(LOG_INFO, "Starting %d threads", get_nb_cpu_cores());
-
-    bool do_draw = 1, do_logic = 1;
-    int mx = WIDTH / 3, my = HEIGHT / 2, mouse_button = 0, mouse_b1 = 0,
-        mouse_b2 = 0;
 
     al_flush_event_queue(event_queue);
     al_set_mouse_xy(display, WIDTH / 3, HEIGHT / 2);
@@ -306,12 +362,7 @@ int main(int argc, char* argv[]) {
 
     bitmap = al_create_bitmap(WIDTH, HEIGHT);
 
-    // Test rectangle
-    Rectangle testRect = {300, 250, 100, 100};
-
-    size_t logic_duration = 0;
-    size_t drawing_duration = 0;
-    bool collision = false ;
+    DONE = 0;
     do {
         // consume events
         do {
@@ -535,7 +586,7 @@ int main(int argc, char* argv[]) {
                 // n_log( LOG_DEBUG , "mouse button: %d" , mouse_button );
             }
 
-            /* 
+            /*
             static int old_mx = -1, old_my = -1;
             double mx_delta = 0.0, my_delta = 0.0;
             if (old_mx != mx || old_my != my) {
@@ -552,39 +603,53 @@ int main(int argc, char* argv[]) {
             */
 
             if (santaSledge.handbrake) {
-                
-                double x1=0,y1=0,x2=0,y2=0;
-                calculate_perpendicular_points( santaSledge.x, santaSledge.y, santaSledge.direction, 20.0, &x1, &y1, &x2, &y2);
-                
+                double x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+                calculate_perpendicular_points(santaSledge.x, santaSledge.y, santaSledge.direction, 20.0, &x1, &y1, &x2, &y2);
+
                 PHYSICS tmp_part;
                 memset(&tmp_part, 0, sizeof(PHYSICS));
                 tmp_part.sz = rand() % 10;
                 tmp_part.type = 1;
                 VECTOR3D_SET(tmp_part.speed, 0.0, 0.0, 0.0);
-                VECTOR3D_SET(tmp_part.position, x1, y1, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 60000000, -1, al_map_rgba(rand()%250, rand()%250, rand()%250, rand() % 100), tmp_part);
-                VECTOR3D_SET(tmp_part.position, x2, y2, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 60000000, -1, al_map_rgba(rand()%250, rand()%250, rand()%250, rand() % 100), tmp_part);
+                // red
+                VECTOR3D_SET(tmp_part.position, x1 + 2 - rand() % 4, y1 + 2 - rand() % 4, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, -1, al_map_rgb(55 + rand() % 200, 0, 0), tmp_part);
+                // green
+                VECTOR3D_SET(tmp_part.position, x1 + 2 - rand() % 4, y1 + 2 - rand() % 4, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, -1, al_map_rgb(0, 55 + rand() % 200, 0), tmp_part);
+                // blue
+                VECTOR3D_SET(tmp_part.position, x1 + 2 - rand() % 4, y1 + 2 - rand() % 4, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, -1, al_map_rgb(0, 0, 55 + rand() % 200), tmp_part);
+                // red
+                VECTOR3D_SET(tmp_part.position, x2 + 2 - rand() % 4, y2 + 2 - rand() % 4, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, -1, al_map_rgb(55 + rand() % 200, 0, 0), tmp_part);
+                // green
+                VECTOR3D_SET(tmp_part.position, x2 + 2 - rand() % 4, y2 + 2 - rand() % 4, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, -1, al_map_rgb(0, 55 + rand() % 200, 0), tmp_part);
+                // blue
+                VECTOR3D_SET(tmp_part.position, x2 + 2 - rand() % 4, y2 + 2 - rand() % 4, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, -1, al_map_rgb(0, 0, 55 + rand() % 200), tmp_part);
             }
 
-            manage_particle_ex(particle_system,1000000000/logicFPS);
+            manage_particle_ex(particle_system, 1000000000 / logicFPS);
 
             update_vehicle(&santaSledge, 1.0 / logicFPS);
-            //print_vehicle(&santaSledge);
+            // print_vehicle(&santaSledge);
 
-            if (santaSledge.x < 0)
-                santaSledge.x = WIDTH;
-            if (santaSledge.x > WIDTH)
-                santaSledge.x = 0;
-            if (santaSledge.y < 0)
-                santaSledge.y = HEIGHT;
-            if (santaSledge.y > HEIGHT)
-                santaSledge.y = 0;
+            if (santaSledge.x < -4 * WIDTH)
+                santaSledge.x = 4 * WIDTH;
+            if (santaSledge.x > 4 * WIDTH)
+                santaSledge.x = -4 * WIDTH;
+            if (santaSledge.y < -4 * HEIGHT)
+                santaSledge.y = 4 * HEIGHT;
+            if (santaSledge.y > 4 * HEIGHT)
+                santaSledge.y = -4 * HEIGHT;
+
+            tx = santaSledge.x - WIDTH / 2;
+            ty = santaSledge.y - HEIGHT / 2;
 
             // Check collision
-            //collision = check_bitmap_vs_rectangle(santaSledge.x, santaSledge.y, al_get_bitmap_width(santaSledgebmp),al_get_bitmap_height(santaSledgebmp), DEG_TO_RAD(santaSledge.direction), testRect);
-
-            collision = check_collision( santaSledgebmp,0, al_get_bitmap_height(santaSledgebmp) / 2.0, santaSledge.x, santaSledge.y, DEG_TO_RAD(santaSledge.direction), testRect);
+            collision = check_collision(santaSledgebmp, 0, al_get_bitmap_height(santaSledgebmp) / 2.0, santaSledge.x, santaSledge.y, DEG_TO_RAD(santaSledge.direction), testRect);
 
             logic_duration = (logic_duration + get_usec(&logic_chrono)) / 2;
             do_logic = 0;
@@ -604,16 +669,15 @@ int main(int argc, char* argv[]) {
                                ALLEGRO_LOCK_READWRITE);
 
             // clear screen
-            al_clear_to_color(al_map_rgb(0, 0, 0));
+            al_clear_to_color(al_map_rgb(100, 100, 100));
 
-            // draw particles 
-            draw_particle(particle_system, 0, 0, w, h, 50);
+            // draw particles
+            draw_particle(particle_system, tx, ty, w, h, 50);
 
-            //show car DEBUG
-            if( get_log_level() == LOG_DEBUG )
-            {
-                //draw sledge and collision point
-                debug_draw_rotated_bitmap(santaSledgebmp, 0, al_get_bitmap_height(santaSledgebmp) / 2.0, santaSledge.x, santaSledge.y, DEG_TO_RAD(santaSledge.direction));
+            // show car DEBUG
+            if (get_log_level() == LOG_DEBUG) {
+                // draw sledge and collision point
+                debug_draw_rotated_bitmap(santaSledgebmp, 0, al_get_bitmap_height(santaSledgebmp) / 2.0, santaSledge.x - tx, santaSledge.y - ty, DEG_TO_RAD(santaSledge.direction));
                 // draw mouse
                 al_draw_circle(mx, my, 16, al_map_rgb(255, 0, 0), 2.0);
                 // draw sledge position
@@ -622,22 +686,57 @@ int main(int argc, char* argv[]) {
                 double length = 10;
                 double end_x = santaSledge.x + length * cos(car_angle);
                 double end_y = santaSledge.y + length * sin(car_angle);
-                //draw direction
+                // draw direction
                 al_draw_line(santaSledge.x, santaSledge.y, end_x, end_y, al_map_rgb(255, 255, 0), 2.0);
                 // print  speed
                 static N_STR* textout = NULL;
                 nstrprintf(textout, "Speed: %f", santaSledge.speed);
                 al_draw_text(font, al_map_rgb(0, 0, 255), WIDTH, 10, ALLEGRO_ALIGN_RIGHT, _nstr(textout));
-            }
-            else
-            {
+            } else {
                 // draw santaSledge
-                al_draw_rotated_bitmap(santaSledgebmp, 0, al_get_bitmap_height(santaSledgebmp) / 2.0, santaSledge.x, santaSledge.y, DEG_TO_RAD(santaSledge.direction), 0);
+                // al_draw_rotated_bitmap(santaSledgebmp, 0, al_get_bitmap_height(santaSledgebmp) / 2.0, santaSledge.x, santaSledge.y, DEG_TO_RAD(santaSledge.direction), 0);
+                al_draw_rotated_bitmap(santaSledgebmp, 0, al_get_bitmap_height(santaSledgebmp) / 2.0, WIDTH / 2, HEIGHT / 2, DEG_TO_RAD(santaSledge.direction), 0);
             }
 
-            // Draw result
-            al_draw_rectangle(testRect.x, testRect.y, testRect.x + testRect.width, testRect.y + testRect.height,
-                      collision ? al_map_rgb(255, 0, 0) : al_map_rgb(0, 255, 0), 2);
+            double testX = testRect.x + testRect.width / 2;
+            double testY = testRect.y + testRect.height / 2;
+            double dx = testX - santaSledge.x;
+            double dy = testY - santaSledge.y;
+            double testDist = sqrt(dx * dx + dy * dy);
+
+            // Calculate the arrowhead position
+            double arrowLength = 10.0;          // Length of the arrowhead
+            double arrowAngle = atan2(dy, dx);  // Angle of the vector
+
+            // Calculate the two arrowhead lines
+            double arrowX1 = (WIDTH / 2 + (50 * dx) / testDist) - arrowLength * cos(arrowAngle - M_PI / 6);
+            double arrowY1 = (HEIGHT / 2 + (50 * dy) / testDist) - arrowLength * sin(arrowAngle - M_PI / 6);
+            double arrowX2 = (WIDTH / 2 + (50 * dx) / testDist) - arrowLength * cos(arrowAngle + M_PI / 6);
+            double arrowY2 = (HEIGHT / 2 + (50 * dy) / testDist) - arrowLength * sin(arrowAngle + M_PI / 6);
+
+            // Draw the arrowhead lines
+            al_draw_line(WIDTH / 2 + (50 * dx) / testDist, HEIGHT / 2 + (50 * dy) / testDist, arrowX1, arrowY1, al_map_rgb(255, 0, 0), 2.0);
+            al_draw_line(WIDTH / 2 + (50 * dx) / testDist, HEIGHT / 2 + (50 * dy) / testDist, arrowX2, arrowY2, al_map_rgb(255, 0, 0), 2.0);
+
+            al_draw_line(WIDTH / 2, HEIGHT / 2, WIDTH / 2 + (50 * dx) / testDist, HEIGHT / 2 + (50 * dy) / testDist, al_map_rgb(255, 0, 0), 2.0);
+
+            // Draw Rectangle
+            al_draw_rectangle(testRect.x - tx, testRect.y - ty, testRect.x + testRect.width - tx, testRect.y + testRect.height - ty,
+                              collision ? al_map_rgb(255, 0, 0) : al_map_rgb(0, 255, 0), 2);
+
+            // draw goods
+            list_foreach( node , good_presents )
+            {
+                gift_dash_object *object = node -> ptr ;
+                al_draw_bitmap(christmasPresents[object->id],object->x-tx,object->y-ty, 0);
+            }
+
+            // draw bad
+            list_foreach( node , bad_presents )
+            {
+                gift_dash_object *object = node -> ptr ;
+                al_draw_bitmap(bogeymanPresents[object->id],object->x-tx,object->y-ty, 0);
+            }
 
             if (!backbuffer) {
                 al_unlock_bitmap(scrbuf);
