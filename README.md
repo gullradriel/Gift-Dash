@@ -29,9 +29,13 @@ To collect a present or a candy, or a bad surprise, you just have to touch it wi
 # Controls
 
 Arrow key UP: accelerate
+
 Arrow key DOWN: brake
+
 Arrow key LEFT: turn left
+
 Arrow key RIGHT: turn RIGHT
+
 Key SPACE: handbrake
 
 # How to build
