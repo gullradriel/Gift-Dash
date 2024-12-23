@@ -56,7 +56,7 @@ char* bgmusic = NULL;
 THREAD_POOL* thread_pool = NULL;
 
 // Test rectangle
-Rectangle testRect = {300, 250, 100, 100};
+CollisionRectangle testRect = {300, 250, 100, 100};
 size_t logic_duration = 0;
 size_t drawing_duration = 0;
 bool collision = false;
@@ -73,7 +73,7 @@ bool do_draw = 1, do_logic = 1;
 int mx = 0, my = 0, mouse_button = 0, mouse_b1 = 0, mouse_b2 = 0;
 
 int key[19] = {false, false, false, false, false, false, false, false, false,
-               false, false, false, false, false, false, false, false, false};
+    false, false, false, false, false, false, false, false, false};
 
 ALLEGRO_BITMAP* santaSledgebmp = NULL;
 VEHICLE santaSledge = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -89,12 +89,22 @@ typedef struct gift_dash_object
     long int y;
     int type;
     int id;
+    int w;
+    int h;
 }gift_dash_object;
 
 LIST *good_presents = NULL;
 LIST *bad_presents = NULL;
 
 double tx = 0, ty = 0;
+
+int check_item_collision(int x1, int y1, int w1, int h1, int x2, int y2, int w2, int h2) {
+    // Check if one box is to the left, right, above, or below the other
+    if (x1 + w1 <= x2 || x1 >= x2 + w2 || y1 + h1 <= y2 || y1 >= y2 + h2) {
+        return 0; // No overlap
+    }
+    return 1; // Overlap
+}
 
 int main(int argc, char* argv[]) {
     /* Set the locale to the POSIX C environment */
@@ -106,12 +116,12 @@ int main(int argc, char* argv[]) {
     set_log_level(LOG_NOTICE);
 
     if (load_app_state("app_config.json", &WIDTH, &HEIGHT, &fullscreen, &bgmusic,
-                       &drawFPS, &logicFPS) != TRUE) {
+                &drawFPS, &logicFPS) != TRUE) {
         n_log(LOG_ERR, "couldn't load app_config.json !");
         exit(1);
     }
     n_log(LOG_DEBUG, "%s starting with params: %dx%d fullscreen(%d), music: %s",
-          argv[0], WIDTH, HEIGHT, fullscreen, _str(bgmusic));
+            argv[0], WIDTH, HEIGHT, fullscreen, _str(bgmusic));
 
     N_STR* log_file = NULL;
     nstrprintf(log_file, "%s.log", argv[0]);
@@ -124,9 +134,9 @@ int main(int argc, char* argv[]) {
         switch (getoptret) {
             case 'h':
                 n_log(LOG_NOTICE,
-                      "\n    %s -h help -v version -V DEBUGLEVEL "
-                      "(NOLOG,VERBOSE,NOTICE,ERROR,DEBUG)\n",
-                      argv[0]);
+                        "\n    %s -h help -v version -V DEBUGLEVEL "
+                        "(NOLOG,VERBOSE,NOTICE,ERROR,DEBUG)\n",
+                        argv[0]);
                 exit(TRUE);
             case 'v':
                 sprintf(ver_str, "%s %s", __DATE__, __TIME__);
@@ -163,25 +173,25 @@ int main(int argc, char* argv[]) {
                 set_log_file(optarg);
                 break;
             case '?': {
-                switch (optopt) {
-                    case 'V':
-                        n_log(LOG_ERR,
-                              "\nPlease specify a log level after -V. \nAvailable "
-                              "values: NOLOG,VERBOSE,NOTICE,ERROR,DEBUG");
-                        break;
-                    case 'L':
-                        n_log(LOG_ERR, "\nPlease specify a log file after -L");
-                    default:
-                        break;
-                }
-            }
-                __attribute__((fallthrough));
+                          switch (optopt) {
+                              case 'V':
+                                  n_log(LOG_ERR,
+                                          "\nPlease specify a log level after -V. \nAvailable "
+                                          "values: NOLOG,VERBOSE,NOTICE,ERROR,DEBUG");
+                                  break;
+                              case 'L':
+                                  n_log(LOG_ERR, "\nPlease specify a log file after -L");
+                              default:
+                                  break;
+                          }
+                      }
+                      __attribute__((fallthrough));
             default:
-                n_log(LOG_ERR,
-                      "\n    %s -h help -v version -V DEBUGLEVEL "
-                      "(NOLOG,VERBOSE,NOTICE,ERROR,DEBUG) -L logfile",
-                      argv[0]);
-                exit(FALSE);
+                      n_log(LOG_ERR,
+                              "\n    %s -h help -v version -V DEBUGLEVEL "
+                              "(NOLOG,VERBOSE,NOTICE,ERROR,DEBUG) -L logfile",
+                              argv[0]);
+                      exit(FALSE);
         }
     }
 
@@ -263,8 +273,8 @@ int main(int argc, char* argv[]) {
 
     al_hide_mouse_cursor(display);
 
-    int GRID_SIZE = 4 ;
-    int ICON_SIZE = 64 ;
+    int GRID_SIZE = 3 ;
+    int ICON_SIZE = 84 ;
 
     // Load the PNG file containing the christmas icons
     png_good = al_load_bitmap("DATA/Gfxs/ChristmasIcons.png");
@@ -287,8 +297,24 @@ int main(int argc, char* argv[]) {
             }
         }
     }
+    // init good presents LIST
+    good_presents = new_generic_list( -1 );
+    for( int it = 0 ; it < 100 ; it ++ )
+    {
+        gift_dash_object *object = NULL ;
+        Malloc( object , gift_dash_object , 1 );
+        object -> x = (-3 * WIDTH) + rand()%((6*WIDTH)-64);
+        object -> y = (-3 * HEIGHT) + rand()%((6*HEIGHT)-64);
+        object -> type = good ;
+        object -> id = rand()%(GRID_SIZE*GRID_SIZE);
+        object -> w = ICON_SIZE;
+        object -> h = ICON_SIZE;
+        list_push( good_presents , object , free );
+    }
 
     // Load the PNG file containing the bogeyman icons
+    GRID_SIZE = 4 ;
+    ICON_SIZE = 128 ;
     png_evil = al_load_bitmap("DATA/Gfxs/BogeymanIcons.png");
     if (!png_evil) {
         fprintf(stderr, "Failed to load BogeymanIcons PNG file.\n");
@@ -309,29 +335,19 @@ int main(int argc, char* argv[]) {
             }
         }
     }
-
-    // init good and bad presents LIST
-    good_presents = new_generic_list( -1 );
+    // init bad presents LIST
     bad_presents = new_generic_list( -1 );
-
-    for( int it = 0 ; it < 50 ; it ++ )
-    {
-        gift_dash_object *object = NULL ;
-        Malloc( object , gift_dash_object , 1 );
-        object -> x = (-4 * WIDTH) + rand()%((8*WIDTH)-64);
-        object -> y = (-4 * HEIGHT) + rand()%((8*HEIGHT)-64);
-        object -> type = good ;
-        object -> id = rand()%16 ;
-        list_push( good_presents , object , free );
-    }
     for( int it = 0 ; it < 100 ; it ++ )
     {
         gift_dash_object *object = NULL ;
         Malloc( object , gift_dash_object , 1 );
-        object -> x = (-4 * WIDTH) + rand()%((8*WIDTH)-64);
-        object -> y = (-4 * HEIGHT) + rand()%((8*HEIGHT)-64);
         object -> type = evil ;
-        object -> id = rand()%16 ;
+        object -> id = rand()%(GRID_SIZE*GRID_SIZE);
+        object -> w = ICON_SIZE;
+        object -> h = ICON_SIZE;
+        object -> x = (-3 * WIDTH) + rand()%((6*WIDTH)-64);
+        object -> y = (-3 * HEIGHT) + rand()%((6*HEIGHT)-64);
+        
         list_push( bad_presents , object , free );
     }
 
@@ -527,7 +543,7 @@ int main(int argc, char* argv[]) {
             if (mouse_b2 == 1)
                 mouse_button = 2;
             else if (ev.type == ALLEGRO_EVENT_DISPLAY_SWITCH_IN ||
-                     ev.type == ALLEGRO_EVENT_DISPLAY_SWITCH_OUT) {
+                    ev.type == ALLEGRO_EVENT_DISPLAY_SWITCH_OUT) {
                 al_clear_keyboard_state(display);
                 al_flush_event_queue(event_queue);
             }
@@ -587,49 +603,90 @@ int main(int argc, char* argv[]) {
             }
 
             /*
-            static int old_mx = -1, old_my = -1;
-            double mx_delta = 0.0, my_delta = 0.0;
-            if (old_mx != mx || old_my != my) {
-                if (old_mx != -1 && old_my != -1) {
-                    mx_delta = (old_mx - mx);
-                    my_delta = (old_my - my);
-                }
-                old_mx = mx;
-                old_my = my;
-            }
+               static int old_mx = -1, old_my = -1;
+               double mx_delta = 0.0, my_delta = 0.0;
+               if (old_mx != mx || old_my != my) {
+               if (old_mx != -1 && old_my != -1) {
+               mx_delta = (old_mx - mx);
+               my_delta = (old_my - my);
+               }
+               old_mx = mx;
+               old_my = my;
+               }
 
-            santaSledge.x -= mx_delta ;
-            santaSledge.y -= my_delta ;
-            */
+               santaSledge.x -= mx_delta ;
+               santaSledge.y -= my_delta ;
+               */
+            double x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+            calculate_perpendicular_points(santaSledge.x, santaSledge.y, santaSledge.direction, 20.0, &x1, &y1, &x2, &y2);
+
+            PHYSICS tmp_part;
+            memset(&tmp_part, 0, sizeof(PHYSICS));
+            tmp_part.type = 1;
+            VECTOR3D_SET(tmp_part.speed, 0.0, 0.0, 0.0);
 
             if (santaSledge.handbrake) {
-                double x1 = 0, y1 = 0, x2 = 0, y2 = 0;
-                calculate_perpendicular_points(santaSledge.x, santaSledge.y, santaSledge.direction, 20.0, &x1, &y1, &x2, &y2);
-
-                PHYSICS tmp_part;
-                memset(&tmp_part, 0, sizeof(PHYSICS));
-                tmp_part.sz = rand() % 10;
-                tmp_part.type = 1;
-                VECTOR3D_SET(tmp_part.speed, 0.0, 0.0, 0.0);
                 // red
                 VECTOR3D_SET(tmp_part.position, x1 + 2 - rand() % 4, y1 + 2 - rand() % 4, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 60000000, -1, al_map_rgb(55 + rand() % 200, 0, 0), tmp_part);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1+rand()%3, al_map_rgb(55 + rand() % 200, 0, 0), tmp_part);
                 // green
                 VECTOR3D_SET(tmp_part.position, x1 + 2 - rand() % 4, y1 + 2 - rand() % 4, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 60000000, -1, al_map_rgb(0, 55 + rand() % 200, 0), tmp_part);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1+rand()%3, al_map_rgb(0, 55 + rand() % 200, 0), tmp_part);
                 // blue
                 VECTOR3D_SET(tmp_part.position, x1 + 2 - rand() % 4, y1 + 2 - rand() % 4, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 60000000, -1, al_map_rgb(0, 0, 55 + rand() % 200), tmp_part);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1+rand()%3, al_map_rgb(0, 0, 55 + rand() % 200), tmp_part);
                 // red
                 VECTOR3D_SET(tmp_part.position, x2 + 2 - rand() % 4, y2 + 2 - rand() % 4, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 60000000, -1, al_map_rgb(55 + rand() % 200, 0, 0), tmp_part);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1+rand()%3, al_map_rgb(55 + rand() % 200, 0, 0), tmp_part);
                 // green
                 VECTOR3D_SET(tmp_part.position, x2 + 2 - rand() % 4, y2 + 2 - rand() % 4, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 60000000, -1, al_map_rgb(0, 55 + rand() % 200, 0), tmp_part);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1+rand()%3, al_map_rgb(0, 55 + rand() % 200, 0), tmp_part);
                 // blue
                 VECTOR3D_SET(tmp_part.position, x2 + 2 - rand() % 4, y2 + 2 - rand() % 4, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 60000000, -1, al_map_rgb(0, 0, 55 + rand() % 200), tmp_part);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1+rand()%3, al_map_rgb(0, 0, 55 + rand() % 200), tmp_part);
             }
+            else if( santaSledge.speed > 0 )
+            {
+                int grey_value=50+rand()%100;
+                // grey
+                VECTOR3D_SET(tmp_part.position, x1 + 2 - rand() % 4, y1 + 2 - rand() % 4, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1+rand()%3, al_map_rgb(grey_value,grey_value,grey_value), tmp_part);
+                // grey
+                VECTOR3D_SET(tmp_part.position, x1 + 2 - rand() % 4, y1 + 2 - rand() % 4, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1+rand()%3, al_map_rgb(grey_value,grey_value,grey_value), tmp_part);
+                // grey
+                VECTOR3D_SET(tmp_part.position, x2 + 2 - rand() % 4, y2 + 2 - rand() % 4, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1+rand()%3, al_map_rgb(grey_value,grey_value,grey_value), tmp_part);
+                // grey
+                VECTOR3D_SET(tmp_part.position, x2 + 2 - rand() % 4, y2 + 2 - rand() % 4, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1+rand()%3, al_map_rgb(grey_value,grey_value,grey_value), tmp_part);
+            }
+            // particles on good things
+            list_foreach( node , good_presents )
+            {
+                gift_dash_object *object = node -> ptr ;
+                VECTOR3D_SET(tmp_part.position, object->x+object->w/2, object->y+object->h/2, 0.0);
+                VECTOR3D_SET(tmp_part.speed, (-5.0+rand()%11)/50.0,(-5.0+rand()%11)/50.0, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 700000, 1+rand()%7, al_map_rgba(55 + rand() % 200,0,0,50+rand()%200), tmp_part);
+                VECTOR3D_SET(tmp_part.speed, (-5.0+rand()%11)/50.0,(-5.0+rand()%11)/50.0, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 700000, 1+rand()%7, al_map_rgba(0,55 + rand() % 200,0,50+rand()%200), tmp_part);
+                VECTOR3D_SET(tmp_part.speed, (-5.0+rand()%11)/50.0,(-5.0+rand()%11)/50.0, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 700000, 1+rand()%7, al_map_rgba(0,0,55 + rand() % 200,50+rand()%200), tmp_part);
+            }
+
+            // particles on bad things
+            list_foreach( node , bad_presents )
+            {
+                gift_dash_object *object = node -> ptr ;
+                VECTOR3D_SET(tmp_part.position, object->x+object->w/2, object->y+object->h/2, 0.0);
+                VECTOR3D_SET(tmp_part.speed, (-5.0+rand()%11)/50.0,(-5.0+rand()%11)/50.0, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 700000, 1+rand()%7, al_map_rgba(0 ,0,0 ,50+rand()%200), tmp_part);
+                VECTOR3D_SET(tmp_part.speed, (-5.0+rand()%11)/50.0,(-5.0+rand()%11)/50.0, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 700000, 1+rand()%7, al_map_rgba(0 ,0,0 ,50+rand()%200), tmp_part);
+                VECTOR3D_SET(tmp_part.speed, (-5.0+rand()%11)/50.0,(-5.0+rand()%11)/50.0, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 700000, 1+rand()%7, al_map_rgba(0 ,0,0,50+rand()%200 ), tmp_part);
+            }
+
 
             manage_particle_ex(particle_system, 1000000000 / logicFPS);
 
@@ -666,10 +723,10 @@ int main(int argc, char* argv[]) {
 
             if (!backbuffer)
                 al_lock_bitmap(scrbuf, al_get_bitmap_format(scrbuf),
-                               ALLEGRO_LOCK_READWRITE);
+                        ALLEGRO_LOCK_READWRITE);
 
             // clear screen
-            al_clear_to_color(al_map_rgb(100, 100, 100));
+            al_clear_to_color(al_map_rgb(175, 175, 175));
 
             // draw particles
             draw_particle(particle_system, tx, ty, w, h, 50);
@@ -722,7 +779,7 @@ int main(int argc, char* argv[]) {
 
             // Draw Rectangle
             al_draw_rectangle(testRect.x - tx, testRect.y - ty, testRect.x + testRect.width - tx, testRect.y + testRect.height - ty,
-                              collision ? al_map_rgb(255, 0, 0) : al_map_rgb(0, 255, 0), 2);
+                    collision ? al_map_rgb(255, 0, 0) : al_map_rgb(0, 255, 0), 2);
 
             // draw goods
             list_foreach( node , good_presents )
@@ -742,7 +799,7 @@ int main(int argc, char* argv[]) {
                 al_unlock_bitmap(scrbuf);
                 al_set_target_bitmap(al_get_backbuffer(display));
                 al_draw_bitmap(scrbuf, w / 2 - al_get_bitmap_width(scrbuf) / 2,
-                               h / 2 - al_get_bitmap_height(scrbuf) / 2, 0);
+                        h / 2 - al_get_bitmap_height(scrbuf) / 2, 0);
             }
 
             drawing_duration = (drawing_duration + get_usec(&drawing_chrono)) / 2;

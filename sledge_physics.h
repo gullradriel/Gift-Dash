@@ -62,7 +62,7 @@ void print_vehicle(const VEHICLE* vehicle);
 typedef struct {
     double x, y;           // Top-left corner
     double width, height;  // Dimensions
-} Rectangle;
+} CollisionRectangle;
 
 // Vector structure for SAT
 typedef struct {
@@ -77,5 +77,5 @@ typedef struct {
 // Vector perpendicular(Vector v);
 // double min_projection(Vector axis, Vector corners[4]);
 // double max_projection(Vector axis, Vector corners[4]);
-bool check_collision(ALLEGRO_BITMAP* bitmap, double cx, double cy, double dx, double dy, double angle, Rectangle rect);
+bool check_collision(ALLEGRO_BITMAP* bitmap, double cx, double cy, double dx, double dy, double angle, CollisionRectangle rect);
 void debug_draw_rotated_bitmap(ALLEGRO_BITMAP* bitmap, double cx, double cy, double dx, double dy, double angle);

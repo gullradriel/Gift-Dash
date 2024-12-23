@@ -273,7 +273,7 @@ bool sat_collision(Vector poly1[4], Vector poly2[4]) {
 }
 
 // check collisions between rotated bitmap and a rect
-bool check_collision(ALLEGRO_BITMAP* bitmap, double cx, double cy, double dx, double dy, double angle, Rectangle rect) {
+bool check_collision(ALLEGRO_BITMAP* bitmap, double cx, double cy, double dx, double dy, double angle, CollisionRectangle rect) {
     Vector bitmap_corners[4];
     double bitmap_width = al_get_bitmap_width(bitmap);
     double bitmap_height = al_get_bitmap_height(bitmap);
