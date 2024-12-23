@@ -283,10 +283,10 @@ bool check_collision(ALLEGRO_BITMAP* bitmap, double cx, double cy, double dx, do
 
     // Get the rectangle's corners
     Vector rect_corners[4] = {
-        {rect.x, rect.y},                             // Top-left
-        {rect.x + rect.width, rect.y},                // Top-right
-        {rect.x + rect.width, rect.y + rect.height},  // Bottom-right
-        {rect.x, rect.y + rect.height}                // Bottom-left
+        {rect.x, rect.y},                    // Top-left
+        {rect.x + rect.w, rect.y},           // Top-right
+        {rect.x + rect.w, rect.y + rect.h},  // Bottom-right
+        {rect.x, rect.y + rect.h}            // Bottom-left
     };
 
     // Check for collision using SAT

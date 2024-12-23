@@ -1,3 +1,17 @@
+/**\file states_management.h
+ *  level file for hacks
+ *\author Castagnier Mickaël aka Gull Ra Driel
+ *\version 1.0
+ *\date 29/12/2021
+ */
+
+#ifndef SLEDGE_HEADER_FOR_HACKS
+#define SLEDGE_HEADER_FOR_HACKS
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <math.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -60,8 +74,8 @@ void print_vehicle(const VEHICLE* vehicle);
 
 // Rectangle structure
 typedef struct {
-    double x, y;           // Top-left corner
-    double width, height;  // Dimensions
+    double x, y;  // Top-left corner
+    double w, h;  // Dimensions
 } CollisionRectangle;
 
 // Vector structure for SAT
@@ -79,3 +93,9 @@ typedef struct {
 // double max_projection(Vector axis, Vector corners[4]);
 bool check_collision(ALLEGRO_BITMAP* bitmap, double cx, double cy, double dx, double dy, double angle, CollisionRectangle rect);
 void debug_draw_rotated_bitmap(ALLEGRO_BITMAP* bitmap, double cx, double cy, double dx, double dy, double angle);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

@@ -25,6 +25,7 @@
 
 #include "sledge_physics.h"
 #include "states_management.h"
+#include "text_scroll.h"
 
 #define RESERVED_SAMPLES 16
 #define MAX_SAMPLE_DATA 10
@@ -55,11 +56,8 @@ char* bgmusic = NULL;
 
 THREAD_POOL* thread_pool = NULL;
 
-// Test rectangle
-CollisionRectangle testRect = {300, 250, 100, 100};
 size_t logic_duration = 0;
 size_t drawing_duration = 0;
-bool collision = false;
 
 bool backbuffer = 1;
 ALLEGRO_BITMAP* png_good = NULL;
@@ -69,41 +67,41 @@ ALLEGRO_BITMAP* bitmap = NULL;
 ALLEGRO_BITMAP* christmasPresents[16];
 ALLEGRO_BITMAP* bogeymanPresents[16];
 
-bool do_draw = 1, do_logic = 1;
+bool do_draw = 1, do_logic = 1, intro_text_scroll_enable = 1;
 int mx = 0, my = 0, mouse_button = 0, mouse_b1 = 0, mouse_b2 = 0;
 
 int key[19] = {false, false, false, false, false, false, false, false, false,
-    false, false, false, false, false, false, false, false, false};
+               false, false, false, false, false, false, false, false, false};
 
 ALLEGRO_BITMAP* santaSledgebmp = NULL;
 VEHICLE santaSledge = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 PARTICLE_SYSTEM* particle_system = NULL;
 
+N_STR* textout = NULL;
+long int max_time = 30000000;
+
 enum {
     good,
-    evil };
+    evil
+};
 
-typedef struct gift_dash_object
-{
-    long int x;
-    long int y;
+typedef struct gift_dash_object {
     int type;
     int id;
-    int w;
-    int h;
-}gift_dash_object;
+    CollisionRectangle rect;
+} gift_dash_object;
 
-LIST *good_presents = NULL;
-LIST *bad_presents = NULL;
+LIST* good_presents = NULL;
+LIST* bad_presents = NULL;
 
 double tx = 0, ty = 0;
 
 int check_item_collision(int x1, int y1, int w1, int h1, int x2, int y2, int w2, int h2) {
     // Check if one box is to the left, right, above, or below the other
     if (x1 + w1 <= x2 || x1 >= x2 + w2 || y1 + h1 <= y2 || y1 >= y2 + h2) {
-        return 0; // No overlap
+        return 0;  // No overlap
     }
-    return 1; // Overlap
+    return 1;  // Overlap
 }
 
 int main(int argc, char* argv[]) {
@@ -116,12 +114,12 @@ int main(int argc, char* argv[]) {
     set_log_level(LOG_NOTICE);
 
     if (load_app_state("app_config.json", &WIDTH, &HEIGHT, &fullscreen, &bgmusic,
-                &drawFPS, &logicFPS) != TRUE) {
+                       &drawFPS, &logicFPS) != TRUE) {
         n_log(LOG_ERR, "couldn't load app_config.json !");
         exit(1);
     }
     n_log(LOG_DEBUG, "%s starting with params: %dx%d fullscreen(%d), music: %s",
-            argv[0], WIDTH, HEIGHT, fullscreen, _str(bgmusic));
+          argv[0], WIDTH, HEIGHT, fullscreen, _str(bgmusic));
 
     N_STR* log_file = NULL;
     nstrprintf(log_file, "%s.log", argv[0]);
@@ -134,9 +132,9 @@ int main(int argc, char* argv[]) {
         switch (getoptret) {
             case 'h':
                 n_log(LOG_NOTICE,
-                        "\n    %s -h help -v version -V DEBUGLEVEL "
-                        "(NOLOG,VERBOSE,NOTICE,ERROR,DEBUG)\n",
-                        argv[0]);
+                      "\n    %s -h help -v version -V DEBUGLEVEL "
+                      "(NOLOG,VERBOSE,NOTICE,ERROR,DEBUG)\n",
+                      argv[0]);
                 exit(TRUE);
             case 'v':
                 sprintf(ver_str, "%s %s", __DATE__, __TIME__);
@@ -173,25 +171,25 @@ int main(int argc, char* argv[]) {
                 set_log_file(optarg);
                 break;
             case '?': {
-                          switch (optopt) {
-                              case 'V':
-                                  n_log(LOG_ERR,
-                                          "\nPlease specify a log level after -V. \nAvailable "
-                                          "values: NOLOG,VERBOSE,NOTICE,ERROR,DEBUG");
-                                  break;
-                              case 'L':
-                                  n_log(LOG_ERR, "\nPlease specify a log file after -L");
-                              default:
-                                  break;
-                          }
-                      }
-                      __attribute__((fallthrough));
+                switch (optopt) {
+                    case 'V':
+                        n_log(LOG_ERR,
+                              "\nPlease specify a log level after -V. \nAvailable "
+                              "values: NOLOG,VERBOSE,NOTICE,ERROR,DEBUG");
+                        break;
+                    case 'L':
+                        n_log(LOG_ERR, "\nPlease specify a log file after -L");
+                    default:
+                        break;
+                }
+            }
+                __attribute__((fallthrough));
             default:
-                      n_log(LOG_ERR,
-                              "\n    %s -h help -v version -V DEBUGLEVEL "
-                              "(NOLOG,VERBOSE,NOTICE,ERROR,DEBUG) -L logfile",
-                              argv[0]);
-                      exit(FALSE);
+                n_log(LOG_ERR,
+                      "\n    %s -h help -v version -V DEBUGLEVEL "
+                      "(NOLOG,VERBOSE,NOTICE,ERROR,DEBUG) -L logfile",
+                      argv[0]);
+                exit(FALSE);
         }
     }
 
@@ -255,7 +253,53 @@ int main(int argc, char* argv[]) {
 
     al_set_window_title(display, "GiftDash");
 
-    ALLEGRO_FONT* font = al_load_font("DATA/2Dumb.ttf", 18, 0);
+    ALLEGRO_FONT* little_font = al_load_font("DATA/2Dumb.ttf", 24, 0);
+    ALLEGRO_FONT* font = al_load_font("DATA/2Dumb.ttf", 48, 0);
+    ALLEGRO_FONT* big_font = al_load_font("DATA/2Dumb.ttf", 48, 0);
+    // Game introduction text
+    const char* intro_text[] = {
+        "Welcome to Gift Dash !",
+        " ",
+        "Use the arrow keys to drive the sledge",
+        "Use SPACE key to use the handbrake",
+        " ",
+        "Collect gifts in order",
+        " ",
+        "Follow the red arrow direction",
+        "Avoid Krampus bad presents",
+        " ",
+        "Tip: good item particles are in colors",
+        "Tip: bad item particles are in black",
+        " ",
+        "The world depends on your skills !",
+        " ",
+        "Good luck, KrampusHacker!"};
+
+    const char* outro_text[] = {
+        "WELL DONE ADVENTURER ! !",
+        " ",
+        "YOU GOT ALL THE PRESENTS BACK !",
+        " ",
+        "As a reward...",
+        " ",
+        "Enjoy the ride without any collision !",
+        " ",
+        "Thanks for playing :-)",
+        " ",
+        " ",
+        " ",
+        "GiftDash",
+        " ",
+        "KrampusHack 2024",
+        " ",
+        "By GullRaDriel"};
+
+    int num_lines = sizeof(intro_text) / sizeof(intro_text[0]);
+    TextManager start_text_manager;
+    init_text_manager(&start_text_manager, intro_text, num_lines, font, 80.0f, HEIGHT);  // 70 pixels per second
+    num_lines = sizeof(outro_text) / sizeof(outro_text[0]);
+    TextManager end_text_manager;
+    init_text_manager(&end_text_manager, outro_text, num_lines, big_font, 80.0f, HEIGHT);  // 70 pixels per second
 
     fps_timer = al_create_timer(1.0 / drawFPS);
     logic_timer = al_create_timer(1.0 / logicFPS);
@@ -273,8 +317,8 @@ int main(int argc, char* argv[]) {
 
     al_hide_mouse_cursor(display);
 
-    int GRID_SIZE = 3 ;
-    int ICON_SIZE = 84 ;
+    int GRID_SIZE = 3;
+    int ICON_SIZE = 84;
 
     // Load the PNG file containing the christmas icons
     png_good = al_load_bitmap("DATA/Gfxs/ChristmasIcons.png");
@@ -298,23 +342,36 @@ int main(int argc, char* argv[]) {
         }
     }
     // init good presents LIST
-    good_presents = new_generic_list( -1 );
-    for( int it = 0 ; it < 100 ; it ++ )
-    {
-        gift_dash_object *object = NULL ;
-        Malloc( object , gift_dash_object , 1 );
-        object -> x = (-3 * WIDTH) + rand()%((6*WIDTH)-64);
-        object -> y = (-3 * HEIGHT) + rand()%((6*HEIGHT)-64);
-        object -> type = good ;
-        object -> id = rand()%(GRID_SIZE*GRID_SIZE);
-        object -> w = ICON_SIZE;
-        object -> h = ICON_SIZE;
-        list_push( good_presents , object , free );
+    good_presents = new_generic_list(-1);
+    for (int it = 0; it < 25; it++) {
+        gift_dash_object* object = NULL;
+        Malloc(object, gift_dash_object, 1);
+        object->type = good;
+        object->id = rand() % (GRID_SIZE * GRID_SIZE);
+        object->rect.w = ICON_SIZE;
+        object->rect.h = ICON_SIZE;
+        bool collided = 0;
+        do {
+            collided = 0;
+            object->rect.x = (-3 * WIDTH) + rand() % ((6 * WIDTH) - 64);
+            object->rect.y = (-3 * HEIGHT) + rand() % ((6 * HEIGHT) - 64);
+            list_foreach(node, good_presents) {
+                gift_dash_object* item = node->ptr;
+                if ((object->rect.x + object->rect.w) >= item->rect.x &&
+                    object->rect.x <= (item->rect.x + item->rect.w) &&
+                    (object->rect.y + object->rect.h) >= item->rect.y &&
+                    object->rect.y <= (item->rect.y + item->rect.h)) {
+                    collided = 1;
+                    n_log(LOG_DEBUG, "%d,%d,%d,%d collided with %d,%d,%d,%d", object->rect.x, object->rect.y, object->rect.w, object->rect.h, item->rect.x, item->rect.y, item->rect.w, item->rect.h);
+                }
+            }
+        } while (collided == 1);
+        list_push(good_presents, object, free);
     }
 
     // Load the PNG file containing the bogeyman icons
-    GRID_SIZE = 4 ;
-    ICON_SIZE = 128 ;
+    GRID_SIZE = 4;
+    ICON_SIZE = 128;
     png_evil = al_load_bitmap("DATA/Gfxs/BogeymanIcons.png");
     if (!png_evil) {
         fprintf(stderr, "Failed to load BogeymanIcons PNG file.\n");
@@ -336,21 +393,43 @@ int main(int argc, char* argv[]) {
         }
     }
     // init bad presents LIST
-    bad_presents = new_generic_list( -1 );
-    for( int it = 0 ; it < 100 ; it ++ )
-    {
-        gift_dash_object *object = NULL ;
-        Malloc( object , gift_dash_object , 1 );
-        object -> type = evil ;
-        object -> id = rand()%(GRID_SIZE*GRID_SIZE);
-        object -> w = ICON_SIZE;
-        object -> h = ICON_SIZE;
-        object -> x = (-3 * WIDTH) + rand()%((6*WIDTH)-64);
-        object -> y = (-3 * HEIGHT) + rand()%((6*HEIGHT)-64);
-        
-        list_push( bad_presents , object , free );
-    }
+    bad_presents = new_generic_list(-1);
+    for (int it = 0; it < 200; it++) {
+        gift_dash_object* object = NULL;
+        Malloc(object, gift_dash_object, 1);
+        object->type = evil;
+        object->id = rand() % (GRID_SIZE * GRID_SIZE);
+        object->rect.w = ICON_SIZE;
+        object->rect.h = ICON_SIZE;
+        bool collided = 0;
+        do {
+            collided = 0;
+            object->rect.x = (-3 * WIDTH) + rand() % ((6 * WIDTH) - 64);
+            object->rect.y = (-3 * HEIGHT) + rand() % ((6 * HEIGHT) - 64);
+            list_foreach(node, bad_presents) {
+                gift_dash_object* item = node->ptr;
+                if ((object->rect.x + object->rect.w) >= item->rect.x &&
+                    object->rect.x <= (item->rect.x + item->rect.w) &&
+                    (object->rect.y + object->rect.h) >= item->rect.y &&
+                    object->rect.y <= (item->rect.y + item->rect.h)) {
+                    collided = 1;
+                    n_log(LOG_DEBUG, "%d,%d,%d,%d collided with %d,%d,%d,%d", object->rect.x, object->rect.y, object->rect.w, object->rect.h, item->rect.x, item->rect.y, item->rect.w, item->rect.h);
+                }
+            }
+            list_foreach(node, good_presents) {
+                gift_dash_object* item = node->ptr;
+                if ((object->rect.x + object->rect.w) >= item->rect.x &&
+                    object->rect.x <= (item->rect.x + item->rect.w) &&
+                    (object->rect.y + object->rect.h) >= item->rect.y &&
+                    object->rect.y <= (item->rect.y + item->rect.h)) {
+                    collided = 1;
+                    n_log(LOG_DEBUG, "%d,%d,%d,%d collided with %d,%d,%d,%d", object->rect.x, object->rect.y, object->rect.w, object->rect.h, item->rect.x, item->rect.y, item->rect.w, item->rect.h);
+                }
+            }
 
+        } while (collided == 1);
+        list_push(bad_presents, object, free);
+    }
 
     if (bgmusic) {
         if (!(sample_data[0] = al_load_sample(bgmusic))) {
@@ -363,6 +442,7 @@ int main(int argc, char* argv[]) {
     __n_assert((santaSledgebmp = al_load_bitmap("DATA/Gfxs/santaSledge.png")), n_log(LOG_ERR, "load bitmap DATA/Gfxs/santaSledge.png returned null"); exit(1););
 
     init_vehicle(&santaSledge, WIDTH / 2, HEIGHT / 2);
+    set_vehicle_properties(&santaSledge, 2.0, 45.0, 75.0, 1.5);
 
     init_particle_system(&particle_system, INT_MAX, 0, 0, 0, 100);
 
@@ -543,7 +623,7 @@ int main(int argc, char* argv[]) {
             if (mouse_b2 == 1)
                 mouse_button = 2;
             else if (ev.type == ALLEGRO_EVENT_DISPLAY_SWITCH_IN ||
-                    ev.type == ALLEGRO_EVENT_DISPLAY_SWITCH_OUT) {
+                     ev.type == ALLEGRO_EVENT_DISPLAY_SWITCH_OUT) {
                 al_clear_keyboard_state(display);
                 al_flush_event_queue(event_queue);
             }
@@ -554,13 +634,13 @@ int main(int argc, char* argv[]) {
             // Processing inputs
             // get_keyboard( chat_line , ev );
             if (key[KEY_F1]) {
-                set_vehicle_properties(&santaSledge, 2.0, 45.0, 150.0, 0.5);
+                set_vehicle_properties(&santaSledge, 2.0, 45.0, 75.0, 1.5);
             }
             if (key[KEY_F2]) {
-                set_vehicle_properties(&santaSledge, 4.0, 60.0, 150.0, 1.0);
+                set_vehicle_properties(&santaSledge, 4.0, 60.0, 100.0, 1.0);
             }
             if (key[KEY_F3]) {
-                set_vehicle_properties(&santaSledge, 6.0, 90.0, 150.0, 2.0);
+                set_vehicle_properties(&santaSledge, 6.0, 90.0, 150.0, 0.5);
             }
             if (key[KEY_F4]) {
             }
@@ -569,12 +649,12 @@ int main(int argc, char* argv[]) {
             if (key[KEY_F6]) {
             }
             set_handbrake(&santaSledge, 0.0);
-            if (key[KEY_LEFT] && santaSledge.speed > 30.0) {
+            if (key[KEY_LEFT] && fabs(santaSledge.speed) > 0) {
                 steer_vehicle(&santaSledge, -2.0);
                 if (key[KEY_SPACE]) {
                     set_handbrake(&santaSledge, 1.0);
                 }
-            } else if (key[KEY_RIGHT] && santaSledge.speed > 30.0) {
+            } else if (key[KEY_RIGHT] && fabs(santaSledge.speed) > 0) {
                 steer_vehicle(&santaSledge, 2.0);
                 if (key[KEY_SPACE]) {
                     set_handbrake(&santaSledge, -1.0);
@@ -584,6 +664,7 @@ int main(int argc, char* argv[]) {
             }
 
             if (key[KEY_UP]) {
+                intro_text_scroll_enable = 0;
                 if (santaSledge.handbrake == 0)
                     accelerate_vehicle(&santaSledge, 1.0 / logicFPS);
             } else {
@@ -602,21 +683,6 @@ int main(int argc, char* argv[]) {
                 // n_log( LOG_DEBUG , "mouse button: %d" , mouse_button );
             }
 
-            /*
-               static int old_mx = -1, old_my = -1;
-               double mx_delta = 0.0, my_delta = 0.0;
-               if (old_mx != mx || old_my != my) {
-               if (old_mx != -1 && old_my != -1) {
-               mx_delta = (old_mx - mx);
-               my_delta = (old_my - my);
-               }
-               old_mx = mx;
-               old_my = my;
-               }
-
-               santaSledge.x -= mx_delta ;
-               santaSledge.y -= my_delta ;
-               */
             double x1 = 0, y1 = 0, x2 = 0, y2 = 0;
             calculate_perpendicular_points(santaSledge.x, santaSledge.y, santaSledge.direction, 20.0, &x1, &y1, &x2, &y2);
 
@@ -628,68 +694,66 @@ int main(int argc, char* argv[]) {
             if (santaSledge.handbrake) {
                 // red
                 VECTOR3D_SET(tmp_part.position, x1 + 2 - rand() % 4, y1 + 2 - rand() % 4, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1+rand()%3, al_map_rgb(55 + rand() % 200, 0, 0), tmp_part);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1 + rand() % 3, al_map_rgb(55 + rand() % 200, 0, 0), tmp_part);
                 // green
                 VECTOR3D_SET(tmp_part.position, x1 + 2 - rand() % 4, y1 + 2 - rand() % 4, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1+rand()%3, al_map_rgb(0, 55 + rand() % 200, 0), tmp_part);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1 + rand() % 3, al_map_rgb(0, 55 + rand() % 200, 0), tmp_part);
                 // blue
                 VECTOR3D_SET(tmp_part.position, x1 + 2 - rand() % 4, y1 + 2 - rand() % 4, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1+rand()%3, al_map_rgb(0, 0, 55 + rand() % 200), tmp_part);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1 + rand() % 3, al_map_rgb(0, 0, 55 + rand() % 200), tmp_part);
                 // red
                 VECTOR3D_SET(tmp_part.position, x2 + 2 - rand() % 4, y2 + 2 - rand() % 4, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1+rand()%3, al_map_rgb(55 + rand() % 200, 0, 0), tmp_part);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1 + rand() % 3, al_map_rgb(55 + rand() % 200, 0, 0), tmp_part);
                 // green
                 VECTOR3D_SET(tmp_part.position, x2 + 2 - rand() % 4, y2 + 2 - rand() % 4, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1+rand()%3, al_map_rgb(0, 55 + rand() % 200, 0), tmp_part);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1 + rand() % 3, al_map_rgb(0, 55 + rand() % 200, 0), tmp_part);
                 // blue
                 VECTOR3D_SET(tmp_part.position, x2 + 2 - rand() % 4, y2 + 2 - rand() % 4, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1+rand()%3, al_map_rgb(0, 0, 55 + rand() % 200), tmp_part);
-            }
-            else if( santaSledge.speed > 0 )
-            {
-                int grey_value=50+rand()%100;
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1 + rand() % 3, al_map_rgb(0, 0, 55 + rand() % 200), tmp_part);
+            } else if (santaSledge.speed > 0) {
+                int grey_value = 50 + rand() % 100;
                 // grey
                 VECTOR3D_SET(tmp_part.position, x1 + 2 - rand() % 4, y1 + 2 - rand() % 4, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1+rand()%3, al_map_rgb(grey_value,grey_value,grey_value), tmp_part);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1 + rand() % 3, al_map_rgb(grey_value, grey_value, grey_value), tmp_part);
                 // grey
                 VECTOR3D_SET(tmp_part.position, x1 + 2 - rand() % 4, y1 + 2 - rand() % 4, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1+rand()%3, al_map_rgb(grey_value,grey_value,grey_value), tmp_part);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1 + rand() % 3, al_map_rgb(grey_value, grey_value, grey_value), tmp_part);
                 // grey
                 VECTOR3D_SET(tmp_part.position, x2 + 2 - rand() % 4, y2 + 2 - rand() % 4, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1+rand()%3, al_map_rgb(grey_value,grey_value,grey_value), tmp_part);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1 + rand() % 3, al_map_rgb(grey_value, grey_value, grey_value), tmp_part);
                 // grey
                 VECTOR3D_SET(tmp_part.position, x2 + 2 - rand() % 4, y2 + 2 - rand() % 4, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1+rand()%3, al_map_rgb(grey_value,grey_value,grey_value), tmp_part);
+                add_particle(particle_system, -1, PIXEL_PART, 60000000, 1 + rand() % 3, al_map_rgb(grey_value, grey_value, grey_value), tmp_part);
             }
             // particles on good things
-            list_foreach( node , good_presents )
-            {
-                gift_dash_object *object = node -> ptr ;
-                VECTOR3D_SET(tmp_part.position, object->x+object->w/2, object->y+object->h/2, 0.0);
-                VECTOR3D_SET(tmp_part.speed, (-5.0+rand()%11)/50.0,(-5.0+rand()%11)/50.0, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 700000, 1+rand()%7, al_map_rgba(55 + rand() % 200,0,0,50+rand()%200), tmp_part);
-                VECTOR3D_SET(tmp_part.speed, (-5.0+rand()%11)/50.0,(-5.0+rand()%11)/50.0, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 700000, 1+rand()%7, al_map_rgba(0,55 + rand() % 200,0,50+rand()%200), tmp_part);
-                VECTOR3D_SET(tmp_part.speed, (-5.0+rand()%11)/50.0,(-5.0+rand()%11)/50.0, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 700000, 1+rand()%7, al_map_rgba(0,0,55 + rand() % 200,50+rand()%200), tmp_part);
+            // list_foreach(node, good_presents) {
+            //    gift_dash_object* object = node->ptr;
+            //
+
+            // particles on good target
+            if (good_presents->start) {
+                gift_dash_object* object = good_presents->start->ptr;
+                VECTOR3D_SET(tmp_part.position, object->rect.x + object->rect.w / 2, object->rect.y + object->rect.h / 2, 0.0);
+                VECTOR3D_SET(tmp_part.speed, (-5.0 + rand() % 11) / 80.0, (-5.0 + rand() % 11) / 80.0, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 900000, 1 + rand() % 7, al_map_rgba(55 + rand() % 200, 0, 0, 50 + rand() % 200), tmp_part);
+                VECTOR3D_SET(tmp_part.speed, (-5.0 + rand() % 11) / 80.0, (-5.0 + rand() % 11) / 80.0, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 900000, 1 + rand() % 7, al_map_rgba(0, 55 + rand() % 200, 0, 50 + rand() % 200), tmp_part);
+                VECTOR3D_SET(tmp_part.speed, (-5.0 + rand() % 11) / 80.0, (-5.0 + rand() % 11) / 80.0, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 900000, 1 + rand() % 7, al_map_rgba(0, 0, 55 + rand() % 200, 50 + rand() % 200), tmp_part);
             }
 
             // particles on bad things
-            list_foreach( node , bad_presents )
-            {
-                gift_dash_object *object = node -> ptr ;
-                VECTOR3D_SET(tmp_part.position, object->x+object->w/2, object->y+object->h/2, 0.0);
-                VECTOR3D_SET(tmp_part.speed, (-5.0+rand()%11)/50.0,(-5.0+rand()%11)/50.0, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 700000, 1+rand()%7, al_map_rgba(0 ,0,0 ,50+rand()%200), tmp_part);
-                VECTOR3D_SET(tmp_part.speed, (-5.0+rand()%11)/50.0,(-5.0+rand()%11)/50.0, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 700000, 1+rand()%7, al_map_rgba(0 ,0,0 ,50+rand()%200), tmp_part);
-                VECTOR3D_SET(tmp_part.speed, (-5.0+rand()%11)/50.0,(-5.0+rand()%11)/50.0, 0.0);
-                add_particle(particle_system, -1, PIXEL_PART, 700000, 1+rand()%7, al_map_rgba(0 ,0,0,50+rand()%200 ), tmp_part);
+            list_foreach(node, bad_presents) {
+                gift_dash_object* object = node->ptr;
+                VECTOR3D_SET(tmp_part.position, object->rect.x + object->rect.w / 2, object->rect.y + object->rect.h / 2, 0.0);
+                VECTOR3D_SET(tmp_part.speed, (-5.0 + rand() % 11) / 50.0, (-5.0 + rand() % 11) / 50.0, 0.0);
+                add_particle(particle_system, -1, PIXEL_PART, 600000, 1 + rand() % 7, al_map_rgba(0, 0, 0, 50 + rand() % 200), tmp_part);
             }
-
 
             manage_particle_ex(particle_system, 1000000000 / logicFPS);
 
+            long int previous_x = santaSledge.x;
+            long int previous_y = santaSledge.y;
             update_vehicle(&santaSledge, 1.0 / logicFPS);
             // print_vehicle(&santaSledge);
 
@@ -705,10 +769,66 @@ int main(int argc, char* argv[]) {
             tx = santaSledge.x - WIDTH / 2;
             ty = santaSledge.y - HEIGHT / 2;
 
-            // Check collision
-            collision = check_collision(santaSledgebmp, 0, al_get_bitmap_height(santaSledgebmp) / 2.0, santaSledge.x, santaSledge.y, DEG_TO_RAD(santaSledge.direction), testRect);
+            // Check collision with the target
+            if (good_presents->start) {
+                gift_dash_object* target_item = good_presents->start->ptr;
+                bool collided = check_collision(santaSledgebmp, 0, al_get_bitmap_height(santaSledgebmp) / 2.0, santaSledge.x, santaSledge.y, DEG_TO_RAD(santaSledge.direction), target_item->rect);
+                if (collided) {
+                    target_item = remove_list_node(good_presents, good_presents->start, gift_dash_object);
+                    // add bad particles for collision
+                    VECTOR3D_SET(tmp_part.position, target_item->rect.x + target_item->rect.w / 2, target_item->rect.y + target_item->rect.h / 2, 0.0);
+                    for (int it = 0; it < 200; it++) {
+                        VECTOR3D_SET(tmp_part.speed, (-5.0 + rand() % 11) / 10.0, (-5.0 + rand() % 11) / 10.0, 0.0);
+                        add_particle(particle_system, -1, PIXEL_PART, 700000, 1 + rand() % 7, al_map_rgba(rand() % 255, rand() % 255, rand() % 255, 50 + rand() % 200), tmp_part);
+                    }
+                    free(target_item);
+                    // add more time
+                    max_time += 15000000;
+                }
+            } else  // no start ? all collected, it's a win !
+            {
+                if (!end_text_manager.is_done) {
+                    VECTOR3D_SET(tmp_part.position, (-3 * WIDTH) + rand() % ((6 * WIDTH) - 64), (-3 * HEIGHT) + rand() % ((6 * HEIGHT) - 64), 0.0);
+                    for (int nb_particles = 0; nb_particles < 200; nb_particles++) {
+                        VECTOR3D_SET(tmp_part.speed, (-5.0 + rand() % 11) / 10.0, (-5.0 + rand() % 11) / 10.0, 0.0);
+                        add_particle(particle_system, -1, PIXEL_PART, 500000 + rand() % 500000, 1 + rand() % 3, al_map_rgb(55 + rand() % 200, 55 + rand() % 200, 55 + rand() % 200), tmp_part);
+                    }
+                }
+            }
+
+            // Check collision with the evil items
+            list_foreach(node, bad_presents) {
+                gift_dash_object* item = node->ptr;
+                bool collided = check_collision(santaSledgebmp, 0, al_get_bitmap_height(santaSledgebmp) / 2.0, santaSledge.x, santaSledge.y, DEG_TO_RAD(santaSledge.direction), item->rect);
+                if (collided) {
+                    santaSledge.x = previous_x;
+                    santaSledge.y = previous_y;
+                    santaSledge.speed = -santaSledge.speed / 2;
+                    update_vehicle(&santaSledge, 1.0 / logicFPS);
+                    // add bad particles for collision
+                    VECTOR3D_SET(tmp_part.position, item->rect.x + item->rect.w / 2, item->rect.y + item->rect.h / 2, 0.0);
+                    for (int it = 0; it < 200; it++) {
+                        VECTOR3D_SET(tmp_part.speed, (-5.0 + rand() % 11) / 10.0, (-5.0 + rand() % 11) / 10.0, 0.0);
+                        add_particle(particle_system, -1, PIXEL_PART, 700000, 1 + rand() % 7, al_map_rgba(0, 0, 0, 50 + rand() % 200), tmp_part);
+                    }
+                }
+            }
+
+            // add snow
+            VECTOR3D_SET(tmp_part.position, (-3 * WIDTH) + rand() % ((6 * WIDTH) - 64), (-3 * HEIGHT) + rand() % ((6 * HEIGHT) - 64), 0.0);
+            VECTOR3D_SET(tmp_part.speed, (-2.0 + rand() % 5) / 10.0, (rand() % 11) / 10.0, 0.0);
+            add_particle(particle_system, -1, SINUS_PART, 3000000, 1 + rand() % 3, al_map_rgba(255, 255, 100 + rand() % 50, 50 + rand() % 50), tmp_part);
+            VECTOR3D_SET(tmp_part.speed, (-2.0 + rand() % 5) / 10.0, (rand() % 11) / 10.0, 0.0);
+            add_particle(particle_system, -1, SINUS_PART, 3000000, 1 + rand() % 3, al_map_rgba(255, 255, 100 + rand() % 50, 50 + rand() % 50), tmp_part);
 
             logic_duration = (logic_duration + get_usec(&logic_chrono)) / 2;
+
+            max_time -= 1000000 / logicFPS;
+            if (max_time <= 0) {
+                max_time = 0;
+                DONE = 1;
+            }
+
             do_logic = 0;
         }
         if (do_draw == 1) {
@@ -723,7 +843,7 @@ int main(int argc, char* argv[]) {
 
             if (!backbuffer)
                 al_lock_bitmap(scrbuf, al_get_bitmap_format(scrbuf),
-                        ALLEGRO_LOCK_READWRITE);
+                               ALLEGRO_LOCK_READWRITE);
 
             // clear screen
             al_clear_to_color(al_map_rgb(175, 175, 175));
@@ -737,77 +857,142 @@ int main(int argc, char* argv[]) {
                 debug_draw_rotated_bitmap(santaSledgebmp, 0, al_get_bitmap_height(santaSledgebmp) / 2.0, santaSledge.x - tx, santaSledge.y - ty, DEG_TO_RAD(santaSledge.direction));
                 // draw mouse
                 al_draw_circle(mx, my, 16, al_map_rgb(255, 0, 0), 2.0);
-                // draw sledge position
-                al_draw_circle(santaSledge.x, santaSledge.y, 20, al_map_rgb(255, 255, 0), 3.0);
-                double car_angle = (santaSledge.direction * M_PI) / 180.0;
-                double length = 10;
-                double end_x = santaSledge.x + length * cos(car_angle);
-                double end_y = santaSledge.y + length * sin(car_angle);
-                // draw direction
-                al_draw_line(santaSledge.x, santaSledge.y, end_x, end_y, al_map_rgb(255, 255, 0), 2.0);
-                // print  speed
-                static N_STR* textout = NULL;
-                nstrprintf(textout, "Speed: %f", santaSledge.speed);
-                al_draw_text(font, al_map_rgb(0, 0, 255), WIDTH, 10, ALLEGRO_ALIGN_RIGHT, _nstr(textout));
             } else {
                 // draw santaSledge
-                // al_draw_rotated_bitmap(santaSledgebmp, 0, al_get_bitmap_height(santaSledgebmp) / 2.0, santaSledge.x, santaSledge.y, DEG_TO_RAD(santaSledge.direction), 0);
                 al_draw_rotated_bitmap(santaSledgebmp, 0, al_get_bitmap_height(santaSledgebmp) / 2.0, WIDTH / 2, HEIGHT / 2, DEG_TO_RAD(santaSledge.direction), 0);
             }
 
-            double testX = testRect.x + testRect.width / 2;
-            double testY = testRect.y + testRect.height / 2;
-            double dx = testX - santaSledge.x;
-            double dy = testY - santaSledge.y;
-            double testDist = sqrt(dx * dx + dy * dy);
+            if (good_presents->start) {
+                gift_dash_object* target_item = good_presents->start->ptr;
+                // Computer direction to target
+                double testX = target_item->rect.x + target_item->rect.w / 2;
+                double testY = target_item->rect.y + target_item->rect.h / 2;
+                double dx = testX - santaSledge.x;
+                double dy = testY - santaSledge.y;
+                double testDist = sqrt(dx * dx + dy * dy);
 
-            // Calculate the arrowhead position
-            double arrowLength = 10.0;          // Length of the arrowhead
-            double arrowAngle = atan2(dy, dx);  // Angle of the vector
+                // Calculate the arrowhead position
+                double arrowLength = 20.0;          // Length of the arrowhead
+                double arrowAngle = atan2(dy, dx);  // Angle of the vector
 
-            // Calculate the two arrowhead lines
-            double arrowX1 = (WIDTH / 2 + (50 * dx) / testDist) - arrowLength * cos(arrowAngle - M_PI / 6);
-            double arrowY1 = (HEIGHT / 2 + (50 * dy) / testDist) - arrowLength * sin(arrowAngle - M_PI / 6);
-            double arrowX2 = (WIDTH / 2 + (50 * dx) / testDist) - arrowLength * cos(arrowAngle + M_PI / 6);
-            double arrowY2 = (HEIGHT / 2 + (50 * dy) / testDist) - arrowLength * sin(arrowAngle + M_PI / 6);
+                // Calculate the two arrowhead lines
+                double arrowX1 = (WIDTH / 2 + (50 * dx) / testDist) - arrowLength * cos(arrowAngle - M_PI / 6);
+                double arrowY1 = (HEIGHT / 2 + (50 * dy) / testDist) - arrowLength * sin(arrowAngle - M_PI / 6);
+                double arrowX2 = (WIDTH / 2 + (50 * dx) / testDist) - arrowLength * cos(arrowAngle + M_PI / 6);
+                double arrowY2 = (HEIGHT / 2 + (50 * dy) / testDist) - arrowLength * sin(arrowAngle + M_PI / 6);
 
-            // Draw the arrowhead lines
-            al_draw_line(WIDTH / 2 + (50 * dx) / testDist, HEIGHT / 2 + (50 * dy) / testDist, arrowX1, arrowY1, al_map_rgb(255, 0, 0), 2.0);
-            al_draw_line(WIDTH / 2 + (50 * dx) / testDist, HEIGHT / 2 + (50 * dy) / testDist, arrowX2, arrowY2, al_map_rgb(255, 0, 0), 2.0);
+                // Draw the arrowhead lines
+                al_draw_line(WIDTH / 2 + (50 * dx) / testDist, HEIGHT / 2 + (50 * dy) / testDist, arrowX1, arrowY1, al_map_rgb(255, 0, 0), 4.0);
+                al_draw_line(WIDTH / 2 + (50 * dx) / testDist, HEIGHT / 2 + (50 * dy) / testDist, arrowX2, arrowY2, al_map_rgb(255, 0, 0), 4.0);
+                // Draw the direction
+                al_draw_line(WIDTH / 2, HEIGHT / 2, WIDTH / 2 + (50 * dx) / testDist, HEIGHT / 2 + (50 * dy) / testDist, al_map_rgb(255, 0, 0), 4.0);
+            }
 
-            al_draw_line(WIDTH / 2, HEIGHT / 2, WIDTH / 2 + (50 * dx) / testDist, HEIGHT / 2 + (50 * dy) / testDist, al_map_rgb(255, 0, 0), 2.0);
+            // Draw goods
+            list_foreach(node, good_presents) {
+                gift_dash_object* object = node->ptr;
+                al_draw_bitmap(christmasPresents[object->id], object->rect.x - tx, object->rect.y - ty, 0);
 
-            // Draw Rectangle
-            al_draw_rectangle(testRect.x - tx, testRect.y - ty, testRect.x + testRect.width - tx, testRect.y + testRect.height - ty,
-                    collision ? al_map_rgb(255, 0, 0) : al_map_rgb(0, 255, 0), 2);
+                // Get the dimensions of the bitmap
+                int bitmap_width = al_get_bitmap_width(christmasPresents[object->id]);
+                int bitmap_height = al_get_bitmap_height(christmasPresents[object->id]);
 
-            // draw goods
-            list_foreach( node , good_presents )
-            {
-                gift_dash_object *object = node -> ptr ;
-                al_draw_bitmap(christmasPresents[object->id],object->x-tx,object->y-ty, 0);
+                // Set the rectangle's color to green
+                ALLEGRO_COLOR good_color = al_map_rgba(0, 200, 0, 10);
+
+                // Draw the rectangle around the bitmap
+                al_draw_rectangle(
+                    object->rect.x - tx, object->rect.y - ty,                                 // Top-left corner
+                    object->rect.x - tx + bitmap_width, object->rect.y - ty + bitmap_height,  // Bottom-right corner
+                    good_color,                                                               // Color
+                    3.0                                                                       // Thickness of the rectangle's outline
+                );
             }
 
             // draw bad
-            list_foreach( node , bad_presents )
-            {
-                gift_dash_object *object = node -> ptr ;
-                al_draw_bitmap(bogeymanPresents[object->id],object->x-tx,object->y-ty, 0);
+            list_foreach(node, bad_presents) {
+                gift_dash_object* object = node->ptr;
+                al_draw_bitmap(bogeymanPresents[object->id], object->rect.x - tx, object->rect.y - ty, 0);
+
+                // Get the dimensions of the bitmap
+                int bitmap_width = al_get_bitmap_width(bogeymanPresents[object->id]);
+                int bitmap_height = al_get_bitmap_height(bogeymanPresents[object->id]);
+
+                // Set the rectangle's color to green
+                ALLEGRO_COLOR bad_color = al_map_rgba(20, 20, 20, 10);
+
+                // Draw the rectangle around the bitmap
+                al_draw_rectangle(
+                    object->rect.x - tx, object->rect.y - ty,                                 // Top-left corner
+                    object->rect.x - tx + bitmap_width, object->rect.y - ty + bitmap_height,  // Bottom-right corner
+                    bad_color,                                                                // Color
+                    3.0                                                                       // Thickness of the rectangle's outline
+                );
             }
 
             if (!backbuffer) {
                 al_unlock_bitmap(scrbuf);
                 al_set_target_bitmap(al_get_backbuffer(display));
                 al_draw_bitmap(scrbuf, w / 2 - al_get_bitmap_width(scrbuf) / 2,
-                        h / 2 - al_get_bitmap_height(scrbuf) / 2, 0);
+                               h / 2 - al_get_bitmap_height(scrbuf) / 2, 0);
             }
 
+            if (intro_text_scroll_enable && !start_text_manager.is_done) {
+                update_text_manager(&start_text_manager, 1.0 / 60.0);
+                render_text_manager(&start_text_manager, WIDTH, HEIGHT);
+            }
+
+            if (!good_presents->start) {
+                // we won !!
+                if (!end_text_manager.is_done) {
+                    update_text_manager(&end_text_manager, 1.0 / 60.0);
+                    render_text_manager(&end_text_manager, WIDTH, HEIGHT);
+                } else {
+                    static bool remove_bad_items = 0;
+                    if (!remove_bad_items) {
+                        remove_bad_items = 1;
+                        list_empty(bad_presents);
+                    }
+                }
+            }
+
+            // print  speed
+            nstrprintf(textout, "Speed: %d", (int)santaSledge.speed);
+            al_draw_text(little_font, al_map_rgb(0, 0, 255), WIDTH, 10, ALLEGRO_ALIGN_RIGHT, _nstr(textout));
+            // print goodies to collect
+            if (good_presents->nb_items > 0) {
+                nstrprintf(textout, "Goodies to collect: %d", good_presents->nb_items);
+                al_draw_text(little_font, al_map_rgb(0, 0, 255), 10, 10, ALLEGRO_ALIGN_LEFT, _nstr(textout));
+            }
+
+            if (good_presents->start) {
+                nstrprintf(textout, "Time left: %d s", (int)(max_time / 1000000));
+                al_draw_text(little_font, al_map_rgb(0, 0, 255), 10, 30, ALLEGRO_ALIGN_LEFT, _nstr(textout));
+            }
             drawing_duration = (drawing_duration + get_usec(&drawing_chrono)) / 2;
+
             al_flip_display();
             do_draw = 0;
         }
 
     } while (!key[KEY_ESC] && !DONE);
+
+    if (DONE && good_presents->start) {
+        al_clear_to_color(al_map_rgb(0, 0, 0));
+        nstrprintf(textout, "YOU LOOSE, TIME'S UP !!");
+        al_draw_text(big_font, al_map_rgb(255, 0, 0), WIDTH / 2, HEIGHT / 2, ALLEGRO_ALIGN_CENTER, _nstr(textout));
+        nstrprintf(textout, "[PRESS ESC TO EXIT]");
+        al_draw_text(big_font, al_map_rgb(255, 0, 0), WIDTH / 2, (HEIGHT / 2) + 50, ALLEGRO_ALIGN_CENTER, _nstr(textout));
+        al_flip_display();
+        key[KEY_ESC] = 0;
+        do {
+            ALLEGRO_EVENT ev;
+            al_wait_for_event(event_queue, &ev);
+            if (ev.type == ALLEGRO_EVENT_KEY_DOWN && ev.keyboard.keycode == ALLEGRO_KEY_ESCAPE) {
+                key[KEY_ESC] = 1;
+            }
+        } while (!key[KEY_ESC]);
+    }
 
     al_uninstall_system();
 
