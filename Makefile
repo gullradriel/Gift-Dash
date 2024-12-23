@@ -6,12 +6,8 @@ CLIBS=
 #OPT=-W -Wall -D_XOPEN_SOURCE=600 -D_XOPEN_SOURCE_EXTENTED -std=gnu99 -O3
 OPT=-g -W -Wall -Wextra -std=gnu99 -O3 -fstack-protector-strong -D_FORTIFY_SOURCE=2 -D_REENTRANT -D_XOPEN_SOURCE=600 -D_XOPEN_SOURCE_EXTENTED -static-libgcc -static-libstdc++
 
-VPATH=../../LIB/src/
-INCLUDE=../../LIB/include
-
-#CLIBS=`pkg-config --cflags --libs allegro-5 allegro_acodec-5 allegro_audio-5 allegro_color-5 allegro_dialog-5 allegro_font-5 allegro_image-5 allegro_main-5 allegro_memfile-5 allegro_physfs-5 allegro_primitives-5 allegro_ttf-5`
-
-#ALLEGRO_LIBS=-lallegro_acodec -lallegro_audio -lallegro_color -lallegro_dialog -lallegro_image -lallegro_main -lallegro_memfile -lallegro_physfs -lallegro_primitives -lallegro_ttf -lallegro_font -lallegro
+VPATH=nilorea-library/src/
+INCLUDE=nilorea-library/include
 
 ALLEGRO_LIBS=-lallegro_acodec -lallegro_audio -lallegro_color -lallegro_image -lallegro_main -lallegro_primitives -lallegro_ttf -lallegro_font -lallegro
 LIBNILOREA=-lnilorea64
@@ -63,7 +59,7 @@ else
 endif
 
 
-SRC=n_common.c n_log.c n_str.c n_list.c n_time.c n_thread_pool.c n_3d.c n_particles.c cJSON.c states_management.c sledge_physics.c GiftDash.c
+SRC=n_common.c n_log.c n_str.c n_list.c n_time.c n_thread_pool.c n_3d.c n_particles.c cJSON.c states_management.c sledge_physics.c text_scroll.c GiftDash.c
 OBJ=$(SRC:%.c=%.o)
 .c.o:
 	$(COMPILE.c) $<
