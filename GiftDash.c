@@ -882,10 +882,10 @@ int main(int argc, char* argv[]) {
                 double arrowY2 = (HEIGHT / 2 + (50 * dy) / testDist) - arrowLength * sin(arrowAngle + M_PI / 6);
 
                 // Draw the arrowhead lines
-                al_draw_line(WIDTH / 2 + (50 * dx) / testDist, HEIGHT / 2 + (50 * dy) / testDist, arrowX1, arrowY1, al_map_rgb(255, 0, 0), 4.0);
-                al_draw_line(WIDTH / 2 + (50 * dx) / testDist, HEIGHT / 2 + (50 * dy) / testDist, arrowX2, arrowY2, al_map_rgb(255, 0, 0), 4.0);
+                al_draw_line(WIDTH / 2 + (50 * dx) / testDist, HEIGHT / 2 + (50 * dy) / testDist, arrowX1, arrowY1, al_map_rgb(0, 255, 0), 4.0);
+                al_draw_line(WIDTH / 2 + (50 * dx) / testDist, HEIGHT / 2 + (50 * dy) / testDist, arrowX2, arrowY2, al_map_rgb(0, 255, 0), 4.0);
                 // Draw the direction
-                al_draw_line(WIDTH / 2, HEIGHT / 2, WIDTH / 2 + (50 * dx) / testDist, HEIGHT / 2 + (50 * dy) / testDist, al_map_rgb(255, 0, 0), 4.0);
+                al_draw_line(WIDTH / 2, HEIGHT / 2, WIDTH / 2 + (50 * dx) / testDist, HEIGHT / 2 + (50 * dy) / testDist, al_map_rgb(0, 255, 0), 4.0);
             }
 
             // Draw goods

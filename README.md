@@ -20,11 +20,13 @@ I'm the Secret Santa for Bugsquasher.
 
 Collect the presents and candies before the time is up.
 
-Each collected present and candy is giving more time.
+Each present have to be collected in the right order. Follow the green arrow on top of your sledge.
 
-Avoid collecting the bad surprises sent by Krampus. They will lower the time you have.
+Each collected present is giving more time.
 
-To collect a present or a candy, or a bad surprise, you just have to touch it with your sledge.
+Avoid hitting the bad surprises sent by Krampus. They will slow you down.
+
+To collect a present or a candy, or suffer bad surprise, you just have to touch it with your sledge.
 
 # Controls
 
@@ -37,6 +39,14 @@ Arrow key LEFT: turn left
 Arrow key RIGHT: turn RIGHT
 
 Key SPACE: handbrake
+
+Bonus keys:
+
+F1: classic sledge
+
+F2: soappy sledge
+
+F3: slippy soapy sledge
 
 # How to build
 
