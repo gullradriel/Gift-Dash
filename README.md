@@ -1,6 +1,11 @@
 # Gift-Dash
 
-My entry for Krampus Hack 2024, a game jam hosted by https://tins.amarillion.org/
+![image](https://github.com/user-attachments/assets/2fa38a14-61e7-4912-b185-bb40edf64850)
+
+
+My entry for Krampus Hack 2024: https://tins.amarillion.org/krampu24/
+
+A game jam hosted by https://tins.amarillion.org/
 
 # Secret Santa
 
